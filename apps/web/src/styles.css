@@ -1,0 +1,39 @@
+:root {
+  font-family: "Segoe UI", sans-serif;
+  color: #111827;
+  background: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.layout {
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.page-card {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+  border-radius: 1rem;
+  background: white;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+}
+
+.nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}

@@ -1,0 +1,32 @@
+{
+  "name": "sahanz-store",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+  "dev": "concurrently \"npm run dev --workspace @sahanz/api\" \"npm run dev --workspace @sahanz/web\"",
+  "dev:web": "npm run dev --workspace @sahanz/web",
+  "dev:api": "npm run dev --workspace @sahanz/api",
+  "build": "npm run build --workspace @sahanz/web",
+  "start": "npm run start --workspace @sahanz/api"
+},
+  "description": "Monorepo scaffold for the Sahanz Store frontend, backend, and shared package.",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SahanPremarathna/Sahanz-Store.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SahanPremarathna/Sahanz-Store/issues"
+  },
+  "homepage": "https://github.com/SahanPremarathna/Sahanz-Store#readme",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
