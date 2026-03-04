@@ -1,10 +1,15 @@
+const store = require("../data/store");
+const dbStore = require("../data/db-store");
+
+function getDataSource() {
+  return dbStore.isSupabaseConfigured() ? dbStore : store;
+}
+
 async function getDeliveriesForUser(userId) {
-  return [
-    { id: "del-1", riderId: userId, status: "assigned" },
-    { id: "del-2", riderId: userId, status: "in_transit" }
-  ];
+  return getDataSource().listDeliveryTasksForUser(userId);
 }
 
 module.exports = {
-  getDeliveriesForUser
+  getDeliveriesForUser,
+  updateDeliveryStatus: (...args) => getDataSource().updateDeliveryTaskStatus(...args)
 };

@@ -1,10 +1,16 @@
-async function getOrdersForUser(userId) {
-  return [
-    { id: "ord-1", userId, status: "processing" },
-    { id: "ord-2", userId, status: "delivered" }
-  ];
+const store = require("../data/store");
+const dbStore = require("../data/db-store");
+
+function getDataSource() {
+  return dbStore.isSupabaseConfigured() ? dbStore : store;
+}
+
+async function getOrdersForUser(user) {
+  return getDataSource().listOrdersForUser(user);
 }
 
 module.exports = {
-  getOrdersForUser
+  createOrder: (...args) => getDataSource().createOrder(...args),
+  getOrdersForUser,
+  updateSellerOrderProgress: (...args) => getDataSource().updateSellerOrderProgress(...args)
 };

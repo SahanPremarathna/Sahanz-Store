@@ -1,0 +1,746 @@
+const crypto = require("crypto");
+const { isSupabaseConfigured, supabaseAdmin } = require("../lib/supabase");
+
+function ensureSupabase() {
+  if (!isSupabaseConfigured() || !supabaseAdmin) {
+    throw new Error("Supabase is not configured");
+  }
+
+  return supabaseAdmin;
+}
+
+function requireSingle(result, context) {
+  if (result.error) {
+    throw new Error(`${context}: ${result.error.message}`);
+  }
+
+  return result.data;
+}
+
+function buildSlug(value) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function roundCoordinate(value, digits) {
+  return Number(value.toFixed(digits));
+}
+
+function mapProfile(profile) {
+  return {
+    id: profile.id,
+    name: profile.full_name,
+    email: profile.email,
+    role: profile.role,
+    phone: profile.phone,
+    address: profile.address || "",
+    businessName: profile.business_name || "",
+    businessAddress: profile.business_address || "",
+    serviceArea: profile.service_area || "",
+    vehicleType: profile.vehicle_type || "",
+    profileNote: profile.profile_note || "",
+    avatarUrl: profile.avatar_url || "",
+    savedAddresses: Array.isArray(profile.saved_addresses)
+      ? profile.saved_addresses.map((entry, index) => ({
+          id: entry.id || `addr-${index + 1}`,
+          label: entry.label || `Address ${index + 1}`,
+          recipientName: entry.recipient_name || "",
+          address: entry.address || "",
+          latitude: Number(entry.latitude || 0),
+          longitude: Number(entry.longitude || 0),
+          isDefault: Boolean(entry.is_default)
+        }))
+      : []
+  };
+}
+
+function sanitizeProfileUpdate(input, role) {
+  const nextProfile = {};
+
+  if (typeof input.name === "string") {
+    nextProfile.full_name = input.name.trim();
+  }
+
+  if (typeof input.email === "string") {
+    nextProfile.email = input.email.trim().toLowerCase();
+  }
+
+  if (typeof input.phone === "string") {
+    nextProfile.phone = input.phone.trim();
+  }
+
+  if (typeof input.profileNote === "string") {
+    nextProfile.profile_note = input.profileNote.trim();
+  }
+
+  if (typeof input.avatarUrl === "string") {
+    nextProfile.avatar_url = input.avatarUrl.trim();
+  }
+
+  if (role === "customer" && typeof input.address === "string") {
+    nextProfile.address = input.address.trim();
+  }
+
+  if (role === "seller") {
+    if (typeof input.businessName === "string") {
+      nextProfile.business_name = input.businessName.trim();
+    }
+
+    if (typeof input.businessAddress === "string") {
+      nextProfile.business_address = input.businessAddress.trim();
+    }
+
+    if (typeof input.serviceArea === "string") {
+      nextProfile.service_area = input.serviceArea.trim();
+    }
+  }
+
+  if (role === "delivery") {
+    if (typeof input.vehicleType === "string") {
+      nextProfile.vehicle_type = input.vehicleType.trim();
+    }
+
+    if (typeof input.serviceArea === "string") {
+      nextProfile.service_area = input.serviceArea.trim();
+    }
+  }
+
+  if (Array.isArray(input.savedAddresses)) {
+    nextProfile.saved_addresses = input.savedAddresses.map((entry, index) => ({
+      id: entry.id || `addr-${index + 1}`,
+      label: String(entry.label || `Address ${index + 1}`).trim(),
+      recipient_name: String(entry.recipientName || "").trim(),
+      address: String(entry.address || "").trim(),
+      latitude: Number(entry.latitude),
+      longitude: Number(entry.longitude),
+      is_default: Boolean(entry.isDefault)
+    }));
+  }
+
+  return nextProfile;
+}
+
+function mapProduct(product, sellerName) {
+  return {
+    id: product.id,
+    sellerId: product.seller_id,
+    sellerName,
+    categoryId: product.category_id,
+    title: product.title,
+    slug: product.slug,
+    description: product.description,
+    priceCents: product.price_cents,
+    currency: product.currency,
+    imageUrl: product.image_url,
+    inventoryCount: product.inventory_count,
+    isActive: product.is_active,
+    sortOrder: product.sort_order
+  };
+}
+
+function formatLocationForRole(order, role) {
+  const exactCoordinates =
+    order.delivery_latitude !== null && order.delivery_longitude !== null
+      ? {
+          latitude: order.delivery_latitude,
+          longitude: order.delivery_longitude
+        }
+      : null;
+  const approximateCoordinates = exactCoordinates
+    ? {
+        latitude: roundCoordinate(exactCoordinates.latitude, 2),
+        longitude: roundCoordinate(exactCoordinates.longitude, 2)
+      }
+    : null;
+
+  return {
+    address: order.delivery_address,
+    exactCoordinates: role === "customer" || role === "delivery" ? exactCoordinates : null,
+    approximateCoordinates,
+    sellerMapLink:
+      role === "seller" && approximateCoordinates
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+            `${approximateCoordinates.latitude},${approximateCoordinates.longitude}`
+          )}`
+        : null,
+    deliveryMapLink:
+      role === "delivery" && exactCoordinates
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+            `${exactCoordinates.latitude},${exactCoordinates.longitude}`
+          )}`
+        : null,
+    deliveryNavigationLink:
+      role === "delivery" && exactCoordinates
+        ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+            `${exactCoordinates.latitude},${exactCoordinates.longitude}`
+          )}`
+        : null
+  };
+}
+
+async function getProfilesByIds(ids) {
+  if (!ids.length) {
+    return new Map();
+  }
+
+  const supabase = ensureSupabase();
+  const result = await supabase
+    .from("profiles")
+    .select("id, full_name, email, role, phone, address, business_name, business_address, service_area, vehicle_type, profile_note, avatar_url, saved_addresses")
+    .in("id", ids);
+  const rows = requireSingle(result, "Failed to load profiles");
+
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+async function getOrderItemsByOrderIds(orderIds) {
+  if (!orderIds.length) {
+    return new Map();
+  }
+
+  const supabase = ensureSupabase();
+  const result = await supabase
+    .from("order_items")
+    .select("id, order_id, seller_product_id, title_snapshot, image_url_snapshot, quantity, price_cents")
+    .in("order_id", orderIds)
+    .order("created_at", { ascending: true });
+  const rows = requireSingle(result, "Failed to load order items");
+
+  const grouped = new Map();
+
+  for (const row of rows) {
+    const items = grouped.get(row.order_id) || [];
+    items.push({
+      productId: row.seller_product_id,
+      title: row.title_snapshot,
+      quantity: row.quantity,
+      priceCents: row.price_cents,
+      imageUrl: row.image_url_snapshot
+    });
+    grouped.set(row.order_id, items);
+  }
+
+  return grouped;
+}
+
+async function enrichOrders(rows, role) {
+  const customerIds = [...new Set(rows.map((row) => row.customer_id))];
+  const sellerIds = [...new Set(rows.map((row) => row.seller_id))];
+  const profiles = await getProfilesByIds([...new Set([...customerIds, ...sellerIds])]);
+  const itemsByOrderId = await getOrderItemsByOrderIds(rows.map((row) => row.id));
+
+  return rows.map((row) => {
+    const customer = profiles.get(row.customer_id);
+    const seller = profiles.get(row.seller_id);
+    const deliveryLocation = formatLocationForRole(row, role);
+
+    return {
+      id: row.id,
+      customerId: row.customer_id,
+      customerName: customer?.full_name || "Customer",
+      sellerId: row.seller_id,
+      sellerName: seller?.full_name || "Seller",
+      deliveryRiderId: row.delivery_rider_id,
+      status: row.status,
+      deliveryStatus: row.delivery_status,
+      totalCents: row.total_cents,
+      currency: row.currency,
+      recipientName: row.recipient_name,
+      deliveryAddress: row.delivery_address,
+      deliveryCoordinates: deliveryLocation.exactCoordinates,
+      deliveryLocation,
+      notes: row.notes,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      items: itemsByOrderId.get(row.id) || []
+    };
+  });
+}
+
+async function listUsers() {
+  const supabase = ensureSupabase();
+  const result = await supabase
+    .from("profiles")
+    .select("id, full_name, email, role, phone, address, business_name, business_address, service_area, vehicle_type, profile_note, avatar_url, saved_addresses")
+    .order("created_at", { ascending: true });
+
+  return requireSingle(result, "Failed to load users").map(mapProfile);
+}
+
+async function getUserById(userId) {
+  const supabase = ensureSupabase();
+  const result = await supabase
+    .from("profiles")
+    .select("id, full_name, email, role, phone, address, business_name, business_address, service_area, vehicle_type, profile_note, avatar_url, saved_addresses")
+    .eq("id", userId)
+    .maybeSingle();
+  const row = requireSingle(result, "Failed to load user");
+
+  return row ? mapProfile(row) : null;
+}
+
+async function listCategories() {
+  const supabase = ensureSupabase();
+  const result = await supabase
+    .from("categories")
+    .select("id, name, slug, sort_order")
+    .order("sort_order", { ascending: true });
+
+  return requireSingle(result, "Failed to load categories").map((row) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    sortOrder: row.sort_order
+  }));
+}
+
+async function updateUserProfile(userId, input) {
+  const current = await getUserById(userId);
+
+  if (!current) {
+    throw new Error("User not found");
+  }
+
+  const payload = sanitizeProfileUpdate(input, current.role);
+
+  if ("full_name" in payload && !payload.full_name) {
+    throw new Error("Full name is required");
+  }
+
+  if ("email" in payload && !payload.email) {
+    throw new Error("Email is required");
+  }
+
+  const supabase = ensureSupabase();
+  const result = await supabase
+    .from("profiles")
+    .update(payload)
+    .eq("id", userId)
+    .select("id, full_name, email, role, phone, address, business_name, business_address, service_area, vehicle_type, profile_note, avatar_url, saved_addresses")
+    .single();
+
+  return mapProfile(requireSingle(result, "Failed to update profile"));
+}
+
+async function listActiveSellerProducts() {
+  const supabase = ensureSupabase();
+  const result = await supabase
+    .from("seller_products")
+    .select("id, seller_id, category_id, title, slug, description, price_cents, currency, image_url, inventory_count, is_active, sort_order")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+  const rows = requireSingle(result, "Failed to load products");
+  const sellers = await getProfilesByIds([...new Set(rows.map((row) => row.seller_id))]);
+
+  return rows.map((row) => mapProduct(row, sellers.get(row.seller_id)?.full_name || "Seller"));
+}
+
+async function listSellerProductsBySeller(sellerId) {
+  const supabase = ensureSupabase();
+  const result = await supabase
+    .from("seller_products")
+    .select("id, seller_id, category_id, title, slug, description, price_cents, currency, image_url, inventory_count, is_active, sort_order")
+    .eq("seller_id", sellerId)
+    .order("sort_order", { ascending: true });
+  const rows = requireSingle(result, "Failed to load seller products");
+  const seller = await getUserById(sellerId);
+
+  return rows.map((row) => mapProduct(row, seller?.name || "Seller"));
+}
+
+async function createSellerProduct(input) {
+  const supabase = ensureSupabase();
+  const slugBase = input.slug || buildSlug(input.title);
+  let slug = slugBase;
+  let suffix = 1;
+
+  for (;;) {
+    const existing = await supabase
+      .from("seller_products")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+
+    if (existing.error) {
+      throw new Error(`Failed to verify product slug: ${existing.error.message}`);
+    }
+
+    if (!existing.data) {
+      break;
+    }
+
+    suffix += 1;
+    slug = `${slugBase}-${suffix}`;
+  }
+
+  const maxSort = await supabase
+    .from("seller_products")
+    .select("sort_order")
+    .eq("seller_id", input.sellerId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (maxSort.error) {
+    throw new Error(`Failed to load seller sort order: ${maxSort.error.message}`);
+  }
+
+  const insertResult = await supabase
+    .from("seller_products")
+    .insert({
+      seller_id: input.sellerId,
+      category_id: input.categoryId,
+      title: input.title,
+      slug,
+      description: input.description,
+      price_cents: input.priceCents,
+      currency: input.currency || "LKR",
+      image_url: input.imageUrl || "",
+      inventory_count: input.inventoryCount,
+      sort_order: (maxSort.data?.sort_order || 0) + 1
+    })
+    .select("id, seller_id, category_id, title, slug, description, price_cents, currency, image_url, inventory_count, is_active, sort_order")
+    .single();
+
+  const row = requireSingle(insertResult, "Failed to create product");
+  const seller = await getUserById(input.sellerId);
+
+  return mapProduct(row, seller?.name || "Seller");
+}
+
+async function createOrder(input) {
+  const supabase = ensureSupabase();
+  const customer = await getUserById(input.customerId);
+
+  if (!customer || customer.role !== "customer") {
+    throw new Error("Customer account not found");
+  }
+
+  if (!input.items.length) {
+    throw new Error("Cart is empty");
+  }
+
+  const productIds = input.items.map((item) => item.productId);
+  const productsResult = await supabase
+    .from("seller_products")
+    .select("id, seller_id, title, price_cents, currency, image_url, inventory_count, is_active")
+    .in("id", productIds);
+  const products = requireSingle(productsResult, "Failed to load products for order");
+  const productMap = new Map(products.map((row) => [row.id, row]));
+
+  let sellerId = null;
+  const orderItems = [];
+
+  for (const item of input.items) {
+    const product = productMap.get(item.productId);
+
+    if (!product || !product.is_active) {
+      throw new Error(`Product not found: ${item.productId}`);
+    }
+
+    if (item.quantity < 1) {
+      throw new Error("Quantity must be at least 1");
+    }
+
+    if (product.inventory_count < item.quantity) {
+      throw new Error(`Not enough stock for ${product.title}`);
+    }
+
+    if (sellerId && sellerId !== product.seller_id) {
+      throw new Error("Orders can only contain products from one seller");
+    }
+
+    sellerId = product.seller_id;
+    orderItems.push({
+      seller_product_id: product.id,
+      title_snapshot: product.title,
+      image_url_snapshot: product.image_url,
+      quantity: item.quantity,
+      price_cents: product.price_cents
+    });
+  }
+
+  const totalCents = orderItems.reduce(
+    (sum, item) => sum + item.price_cents * item.quantity,
+    0
+  );
+
+  const orderInsert = await supabase
+    .from("orders")
+    .insert({
+      customer_id: input.customerId,
+      seller_id: sellerId,
+      delivery_rider_id: "00000000-0000-0000-0000-000000000301",
+      status: "pending",
+      delivery_status: "awaiting_assignment",
+      total_cents: totalCents,
+      currency: "LKR",
+      recipient_name: input.recipientName || customer.name,
+      delivery_address: input.deliveryAddress,
+      delivery_latitude:
+        input.deliveryCoordinates?.latitude !== undefined
+          ? Number(input.deliveryCoordinates.latitude)
+          : null,
+      delivery_longitude:
+        input.deliveryCoordinates?.longitude !== undefined
+          ? Number(input.deliveryCoordinates.longitude)
+          : null,
+      notes: input.notes || ""
+    })
+    .select("id, customer_id, seller_id, delivery_rider_id, status, delivery_status, total_cents, currency, recipient_name, delivery_address, delivery_latitude, delivery_longitude, notes, created_at, updated_at")
+    .single();
+  const orderRow = requireSingle(orderInsert, "Failed to create order");
+
+  const orderItemsInsert = await supabase
+    .from("order_items")
+    .insert(
+      orderItems.map((item) => ({
+        order_id: orderRow.id,
+        ...item
+      }))
+    );
+
+  if (orderItemsInsert.error) {
+    throw new Error(`Failed to create order items: ${orderItemsInsert.error.message}`);
+  }
+
+  const deliveryTaskInsert = await supabase.from("delivery_tasks").insert({
+    order_id: orderRow.id,
+    rider_id: "00000000-0000-0000-0000-000000000301",
+    status: "assigned"
+  });
+
+  if (deliveryTaskInsert.error) {
+    throw new Error(`Failed to create delivery task: ${deliveryTaskInsert.error.message}`);
+  }
+
+  for (const item of input.items) {
+    const product = productMap.get(item.productId);
+    const updateResult = await supabase
+      .from("seller_products")
+      .update({
+        inventory_count: product.inventory_count - item.quantity
+      })
+      .eq("id", product.id);
+
+    if (updateResult.error) {
+      throw new Error(`Failed to update stock for ${product.title}: ${updateResult.error.message}`);
+    }
+  }
+
+  return (await enrichOrders([orderRow], "customer"))[0];
+}
+
+async function updateSellerOrderProgress(orderId, step, sellerId) {
+  const supabase = ensureSupabase();
+  const orderResult = await supabase
+    .from("orders")
+    .select("id, customer_id, seller_id, delivery_rider_id, status, delivery_status, total_cents, currency, recipient_name, delivery_address, delivery_latitude, delivery_longitude, notes, created_at, updated_at")
+    .eq("id", orderId)
+    .eq("seller_id", sellerId)
+    .maybeSingle();
+  const order = requireSingle(orderResult, "Failed to load seller order");
+
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  if (order.status === "delivered") {
+    throw new Error("Delivered orders cannot be updated by the seller");
+  }
+
+  const patch = {
+    updated_at: new Date().toISOString()
+  };
+
+  if (step === "confirm") {
+    if (order.status !== "pending") {
+      throw new Error("Only pending orders can be confirmed");
+    }
+
+    patch.status = "processing";
+  } else if (step === "ready_for_pickup") {
+    if (order.delivery_status === "picked_up" || order.delivery_status === "in_transit") {
+      throw new Error("This order is already with the rider");
+    }
+
+    if (order.delivery_status === "delivered") {
+      throw new Error("This order has already been delivered");
+    }
+
+    if (order.status === "pending") {
+      patch.status = "processing";
+    }
+
+    patch.delivery_status = "assigned";
+  } else {
+    throw new Error("Unsupported seller progress step");
+  }
+
+  const updateResult = await supabase
+    .from("orders")
+    .update(patch)
+    .eq("id", orderId)
+    .eq("seller_id", sellerId)
+    .select("id, customer_id, seller_id, delivery_rider_id, status, delivery_status, total_cents, currency, recipient_name, delivery_address, delivery_latitude, delivery_longitude, notes, created_at, updated_at")
+    .single();
+
+  return (await enrichOrders([requireSingle(updateResult, "Failed to update seller order")], "seller"))[0];
+}
+
+async function listOrdersForUser(user) {
+  const supabase = ensureSupabase();
+  let query = supabase
+    .from("orders")
+    .select("id, customer_id, seller_id, delivery_rider_id, status, delivery_status, total_cents, currency, recipient_name, delivery_address, delivery_latitude, delivery_longitude, notes, created_at, updated_at")
+    .order("created_at", { ascending: false });
+
+  if (user.role === "customer") {
+    query = query.eq("customer_id", user.id);
+  }
+
+  if (user.role === "seller") {
+    query = query.eq("seller_id", user.id);
+  }
+
+  if (user.role === "delivery") {
+    query = query.eq("delivery_rider_id", user.id);
+  }
+
+  const rows = requireSingle(await query, "Failed to load orders");
+  return enrichOrders(rows, user.role);
+}
+
+async function listDeliveryTasksForUser(userId) {
+  const supabase = ensureSupabase();
+  const tasksResult = await supabase
+    .from("delivery_tasks")
+    .select("id, order_id, rider_id, status, created_at, updated_at")
+    .eq("rider_id", userId)
+    .order("created_at", { ascending: false });
+  const tasks = requireSingle(tasksResult, "Failed to load delivery tasks");
+
+  const orderIds = tasks.map((task) => task.order_id);
+  const ordersResult = await supabase
+    .from("orders")
+    .select("id, customer_id, seller_id, delivery_rider_id, status, delivery_status, total_cents, currency, recipient_name, delivery_address, delivery_latitude, delivery_longitude, notes, created_at, updated_at")
+    .in("id", orderIds);
+  const orders = orderIds.length
+    ? await enrichOrders(requireSingle(ordersResult, "Failed to load delivery orders"), "delivery")
+    : [];
+  const orderMap = new Map(orders.map((order) => [order.id, order]));
+
+  return tasks.map((task) => ({
+    id: task.id,
+    orderId: task.order_id,
+    riderId: task.rider_id,
+    status: task.status,
+    createdAt: task.created_at,
+    updatedAt: task.updated_at,
+    order: orderMap.get(task.order_id) || null
+  }));
+}
+
+async function updateDeliveryTaskStatus(taskId, status, riderId) {
+  const supabase = ensureSupabase();
+  const currentTaskResult = await supabase
+    .from("delivery_tasks")
+    .select("id, order_id, rider_id, status, created_at, updated_at")
+    .eq("id", taskId)
+    .eq("rider_id", riderId)
+    .maybeSingle();
+  const currentTask = requireSingle(currentTaskResult, "Failed to load delivery task");
+
+  if (!currentTask) {
+    throw new Error("Delivery task not found");
+  }
+
+  const currentOrderResult = await supabase
+    .from("orders")
+    .select("id, delivery_status, status")
+    .eq("id", currentTask.order_id)
+    .maybeSingle();
+  const currentOrder = requireSingle(currentOrderResult, "Failed to load delivery order");
+
+  if (!currentOrder) {
+    throw new Error("Order not found");
+  }
+
+  if (status === "picked_up" && currentOrder.delivery_status !== "assigned") {
+    throw new Error("Seller has not marked this order ready for pickup yet");
+  }
+
+  if (status === "in_transit" && currentOrder.delivery_status !== "picked_up") {
+    throw new Error("Mark the order as picked up before starting delivery");
+  }
+
+  if (status === "delivered" && currentOrder.delivery_status !== "in_transit") {
+    throw new Error("Mark the order as in transit before completing delivery");
+  }
+
+  const taskResult = await supabase
+    .from("delivery_tasks")
+    .update({
+      status,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", taskId)
+    .eq("rider_id", riderId)
+    .select("id, order_id, rider_id, status, created_at, updated_at")
+    .maybeSingle();
+  const task = requireSingle(taskResult, "Failed to update delivery task");
+
+  if (!task) {
+    throw new Error("Delivery task not found");
+  }
+
+  const orderPatch = {
+    delivery_status: status,
+    updated_at: new Date().toISOString()
+  };
+
+  if (status === "picked_up" || status === "in_transit") {
+    orderPatch.status = "out_for_delivery";
+  }
+
+  if (status === "delivered") {
+    orderPatch.status = "delivered";
+  }
+
+  const orderUpdate = await supabase
+    .from("orders")
+    .update(orderPatch)
+    .eq("id", task.order_id)
+    .select("id, customer_id, seller_id, delivery_rider_id, status, delivery_status, total_cents, currency, recipient_name, delivery_address, delivery_latitude, delivery_longitude, notes, created_at, updated_at")
+    .single();
+  const order = (await enrichOrders([requireSingle(orderUpdate, "Failed to update order")], "delivery"))[0];
+
+  return {
+    id: task.id,
+    orderId: task.order_id,
+    riderId: task.rider_id,
+    status: task.status,
+    createdAt: task.created_at,
+    updatedAt: task.updated_at,
+    order
+  };
+}
+
+module.exports = {
+  createOrder,
+  createSellerProduct,
+  getUserById,
+  isSupabaseConfigured,
+  listActiveSellerProducts,
+  listCategories,
+  listDeliveryTasksForUser,
+  listOrdersForUser,
+  listSellerProductsBySeller,
+  listUsers,
+  updateSellerOrderProgress,
+  updateUserProfile,
+  updateDeliveryTaskStatus
+};
