@@ -5,201 +5,29 @@ import CartDrawer from "../../components/CartDrawer";
 import FloatingCartButton from "../../components/FloatingCartButton";
 import Navigation from "../../components/Navigation";
 import PageTransition from "../../components/PageTransition";
-import SmartImage from "../../components/SmartImage";
+import SiteFooter from "../../components/SiteFooter";
 import { useShop } from "../../shop/ShopContext";
-
-function formatMoney(currency, cents) {
-  return `${currency} ${(cents / 100).toFixed(2)}`;
-}
-
-const PRODUCT_MIN_WIDTH = 236;
-const INITIAL_ROWS = 6;
-const PRELOAD_ROWS = 5;
-const BATCH_ROWS = 3;
-const CATEGORY_PREVIEW_ROWS = 2;
-const FOR_YOU_LIMIT = 4;
-const FOR_YOU_FALLBACK_LIMIT = 4;
-const INTERACTION_STORAGE_KEY = "sahanz-store-interactions";
-const HERO_SCENES = [
-  {
-    headline: "Shop what matters.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1600&q=80"
-  },
-  {
-    headline: "Find Daily Essentials.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1488459716781-31db52582fe9?auto=format&fit=crop&w=1600&q=80"
-  },
-  {
-    headline: "Everything You Need.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1579113800032-c38bd7635818?auto=format&fit=crop&w=1600&q=80"
-  },
-  {
-    headline: "Better Shopping Faster.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1604719312566-8912e9c8a213?auto=format&fit=crop&w=1600&q=80"
-  }
-];
-
-function limitCatalog(categories, maxProducts) {
-  let remaining = maxProducts;
-
-  return categories
-    .map((category) => {
-      if (remaining <= 0) {
-        return null;
-      }
-
-      const products = category.products.slice(0, remaining);
-      remaining -= products.length;
-
-      return products.length
-        ? {
-            ...category,
-            products
-          }
-        : null;
-    })
-    .filter(Boolean);
-}
-
-function loadInteractionStore() {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  try {
-    return JSON.parse(window.localStorage.getItem(INTERACTION_STORAGE_KEY) || "{}");
-  } catch (_error) {
-    return {};
-  }
-}
-
-function saveInteractionStore(store) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(INTERACTION_STORAGE_KEY, JSON.stringify(store));
-}
-
-function buildInteractionKey(userId) {
-  return userId || "guest";
-}
-
-function sortProductsForYou(products, interactionState) {
-  const searches = interactionState?.searches || {};
-  const productInteractions = interactionState?.products || {};
-  const activeSearchTerms = Object.keys(searches)
-    .sort((left, right) => (searches[right]?.lastAt || 0) - (searches[left]?.lastAt || 0))
-    .slice(0, 8);
-
-  return products
-    .map((product) => {
-      const productState = productInteractions[product.slug] || {};
-      const productText = `${product.name} ${product.description} ${product.categoryName || ""}`.toLowerCase();
-      const searchBoost = activeSearchTerms.reduce((sum, term) => {
-        if (!term || !productText.includes(term)) {
-          return sum;
-        }
-
-        return sum + (searches[term]?.count || 0) * 3;
-      }, 0);
-      const score =
-        (productState.views || 0) * 3 +
-        (productState.adds || 0) * 5 +
-        (productState.searchHits || 0) * 2 +
-        searchBoost;
-
-      return {
-        ...product,
-        score,
-        lastAt: productState.lastAt || 0
-      };
-    })
-    .filter((product) => product.score > 0)
-    .sort((left, right) => right.score - left.score || right.lastAt - left.lastAt)
-    .slice(0, FOR_YOU_LIMIT);
-}
-
-function pickRandomProducts(products, count) {
-  const shuffled = [...products];
-
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
-  }
-
-  return shuffled.slice(0, count);
-}
-
-function fillProducts(products, preferredProducts, targetCount) {
-  const selected = preferredProducts.slice(0, targetCount);
-  const selectedIds = new Set(selected.map((product) => product.id));
-  const remainingProducts = products.filter((product) => !selectedIds.has(product.id));
-  const preferredCategories = preferredProducts.map((product) => product.categorySlug);
-  const sameCategoryProducts = remainingProducts.filter((product) =>
-    preferredCategories.includes(product.categorySlug)
-  );
-  const otherProducts = remainingProducts.filter(
-    (product) => !preferredCategories.includes(product.categorySlug)
-  );
-
-  if (selected.length >= targetCount) {
-    return selected;
-  }
-
-  const sameCategoryFill = sameCategoryProducts.slice(0, targetCount - selected.length);
-
-  if (selected.length + sameCategoryFill.length >= targetCount) {
-    return [...selected, ...sameCategoryFill];
-  }
-
-  return [
-    ...selected,
-    ...sameCategoryFill,
-    ...pickRandomProducts(
-      otherProducts,
-      targetCount - selected.length - sameCategoryFill.length
-    )
-  ];
-}
-
-function buildForYouProductQueue(products, preferredProducts) {
-  const firstGroup = fillProducts(products, preferredProducts, FOR_YOU_LIMIT);
-  const selectedIds = new Set(firstGroup.map((product) => product.id));
-  const remainingProducts = products.filter((product) => !selectedIds.has(product.id));
-  const preferredCategories = new Set(
-    (preferredProducts.length ? preferredProducts : firstGroup)
-      .map((product) => product.categorySlug)
-      .filter(Boolean)
-  );
-
-  const sameCategoryProducts = remainingProducts.filter((product) =>
-    preferredCategories.has(product.categorySlug)
-  );
-  const otherProducts = remainingProducts.filter(
-    (product) => !preferredCategories.has(product.categorySlug)
-  );
-
-  return [...firstGroup, ...sameCategoryProducts, ...otherProducts];
-}
-
-function chunkProducts(products, chunkSize) {
-  const chunks = [];
-
-  for (let index = 0; index < products.length; index += chunkSize) {
-    const group = products.slice(index, index + chunkSize);
-
-    if (group.length) {
-      chunks.push(group);
-    }
-  }
-
-  return chunks;
-}
+import ForYouSection from "./components/ForYouSection";
+import ShopCategorySection from "./components/ShopCategorySection";
+import {
+  BATCH_ROWS,
+  CATEGORY_PREVIEW_ROWS,
+  FOR_YOU_LIMIT,
+  HERO_SCENES,
+  INITIAL_ROWS,
+  PRELOAD_ROWS,
+  PRODUCT_MIN_WIDTH
+} from "./shopPage.constants";
+import {
+  buildForYouProductQueue,
+  buildInteractionKey,
+  chunkProducts,
+  formatMoney,
+  limitCatalog,
+  loadInteractionStore,
+  saveInteractionStore,
+  sortProductsForYou
+} from "./shopPage.utils";
 
 export default function ShopPage() {
   const navigate = useNavigate();
@@ -250,10 +78,6 @@ export default function ShopPage() {
   const forYouProducts = useMemo(
     () => sortProductsForYou(allProducts, interactionState),
     [allProducts, interactionState]
-  );
-  const displayedForYouProducts = useMemo(
-    () => fillProducts(allProducts, forYouProducts, FOR_YOU_LIMIT),
-    [allProducts, forYouProducts]
   );
   const forYouProductQueue = useMemo(
     () => buildForYouProductQueue(allProducts, forYouProducts),
@@ -460,87 +284,6 @@ export default function ShopPage() {
     setForYouPageIndex((current) => (current - 1 + forYouPages.length) % forYouPages.length);
   }
 
-  function renderForYouSection() {
-    if (isCategoryPage) {
-      return null;
-    }
-
-    return (
-      <section className={`catalog-section for-you-panel ${hasActiveSearch ? "for-you-panel-after-search" : ""}`}>
-        {forYouPages.length ? (
-          <div className="for-you-carousel">
-            <button
-              aria-label="Previous recommendations"
-              className="for-you-arrow for-you-arrow-left"
-              onClick={showPreviousForYouPage}
-              type="button"
-            >
-              &#8249;
-            </button>
-            <div className="for-you-viewport">
-              <div
-                className="for-you-track"
-                style={{ transform: `translateX(-${forYouPageIndex * 100}%)` }}
-              >
-                {forYouPages.map((group, groupIndex) => (
-                  <div className="product-grid for-you-grid" key={`for-you-group-${groupIndex}`}>
-                    {group.map((product) => (
-                      <article key={`for-you-${groupIndex}-${product.id}`} className="product-card featured-product-card">
-                        <Link
-                          className="product-link"
-                          onClick={() => recordProductInteraction(product, "views")}
-                          to={`/products/${product.slug}`}
-                        >
-                          <SmartImage
-                            alt={product.name}
-                            className="product-image"
-                            src={product.imageUrl}
-                          />
-                          <div className="product-meta">
-                            <span className="muted">{product.categoryName}</span>
-                            <h3>{product.name}</h3>
-                            <p>{product.description}</p>
-                          </div>
-                        </Link>
-                        <div className="product-footer">
-                          <strong>{formatMoney(product.currency, product.priceCents)}</strong>
-                          <span className="muted">Stock {product.inventoryCount}</span>
-                        </div>
-                        <button
-                          aria-label={`Add ${product.name} to cart`}
-                          className="quick-add-button"
-                          onClick={() => {
-                            recordProductInteraction(product, "adds");
-                            addToCart(product, { openCart: true });
-                          }}
-                          type="button"
-                        >
-                          +
-                        </button>
-                      </article>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <button
-              aria-label="Next recommendations"
-              className="for-you-arrow for-you-arrow-right"
-              onClick={showNextForYouPage}
-              type="button"
-            >
-              &#8250;
-            </button>
-          </div>
-        ) : (
-          <p className="muted">
-            No products are available yet.
-          </p>
-        )}
-      </section>
-    );
-  }
-
   if (user?.role === "seller") {
     return <Navigate to="/seller" replace />;
   }
@@ -625,7 +368,19 @@ export default function ShopPage() {
               {catalogState ? <span className="muted">{catalogState}</span> : null}
             </div>
           ) : null}
-          {!hasActiveSearch ? renderForYouSection() : null}
+          {!hasActiveSearch ? (
+            <ForYouSection
+              addToCart={addToCart}
+              forYouPageIndex={forYouPageIndex}
+              forYouPages={forYouPages}
+              formatMoney={formatMoney}
+              hasActiveSearch={hasActiveSearch}
+              isCategoryPage={isCategoryPage}
+              onNext={showNextForYouPage}
+              onPrevious={showPreviousForYouPage}
+              onRecordProductInteraction={recordProductInteraction}
+            />
+          ) : null}
           {isCategoryPage ? (
             <div className="category-page-actions">
               <div className="category-page-heading">
@@ -638,73 +393,22 @@ export default function ShopPage() {
             </div>
           ) : null}
           {renderedCatalog.map((category) => (
-            <section
+            <ShopCategorySection
+              addToCart={addToCart}
+              category={category}
+              categoryPreviewRows={CATEGORY_PREVIEW_ROWS}
+              filters={filters}
+              formatMoney={formatMoney}
+              hasActiveSearch={hasActiveSearch}
+              isCategoryPage={isCategoryPage}
               key={category.id}
-              className="catalog-section"
-              ref={(element) => {
-                categorySectionRefs.current[category.slug] = element;
+              onRecordProductInteraction={recordProductInteraction}
+              onShowFullCategory={showFullCategory}
+              productsPerRow={productsPerRow}
+              setCategoryRef={(slug, element) => {
+                categorySectionRefs.current[slug] = element;
               }}
-            >
-              <div className="section-heading compact">
-                <h3>{category.name}</h3>
-                <span className="muted">{category.products.length} listings</span>
-              </div>
-              <div className={`product-grid ${hasActiveSearch ? "search-results-grid" : ""}`}>
-                {category.products
-                  .slice(
-                    0,
-                    isCategoryPage || filters.category
-                      ? category.products.length
-                      : productsPerRow * CATEGORY_PREVIEW_ROWS
-                  )
-                  .map((product) => (
-                  <article key={product.id} className="product-card">
-                    <Link
-                      className="product-link"
-                      onClick={() => recordProductInteraction(product, "views")}
-                      to={`/products/${product.slug}`}
-                    >
-                      <SmartImage
-                        alt={product.name}
-                        className="product-image"
-                        src={product.imageUrl}
-                      />
-                      <div className="product-meta">
-                        <span className="muted">Seller: {product.sellerName}</span>
-                        <h3>{product.name}</h3>
-                        <p>{product.description}</p>
-                      </div>
-                    </Link>
-                    <div className="product-footer">
-                      <strong>{formatMoney(product.currency, product.priceCents)}</strong>
-                      <span className="muted">Stock {product.inventoryCount}</span>
-                    </div>
-                    <button
-                      aria-label={`Add ${product.name} to cart`}
-                      className="quick-add-button"
-                      onClick={() => {
-                        recordProductInteraction(product, "adds");
-                        addToCart(product, { openCart: true });
-                      }}
-                      type="button"
-                    >
-                      +
-                    </button>
-                  </article>
-                ))}
-              </div>
-              {!isCategoryPage && !filters.category && category.products.length > productsPerRow * CATEGORY_PREVIEW_ROWS ? (
-                <div className="category-section-actions">
-                  <button
-                    className="see-more-button"
-                    onClick={() => showFullCategory(category)}
-                    type="button"
-                  >
-                    See more...
-                  </button>
-                </div>
-              ) : null}
-            </section>
+            />
           ))}
           {!visibleCatalog.length && !catalogState ? (
             hasActiveSearch ? (
@@ -717,7 +421,19 @@ export default function ShopPage() {
               </p>
             )
           ) : null}
-          {hasActiveSearch ? renderForYouSection() : null}
+          {hasActiveSearch ? (
+            <ForYouSection
+              addToCart={addToCart}
+              forYouPageIndex={forYouPageIndex}
+              forYouPages={forYouPages}
+              formatMoney={formatMoney}
+              hasActiveSearch={hasActiveSearch}
+              isCategoryPage={isCategoryPage}
+              onNext={showNextForYouPage}
+              onPrevious={showPreviousForYouPage}
+              onRecordProductInteraction={recordProductInteraction}
+            />
+          ) : null}
           {hasMoreProducts ? (
             <>
               <p className="catalog-loading-note muted">
@@ -739,6 +455,7 @@ export default function ShopPage() {
             </div>
           ) : null}
         </section>
+        <SiteFooter />
       </PageTransition>
       <FloatingCartButton />
       <CartDrawer />

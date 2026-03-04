@@ -4,6 +4,7 @@ import Navigation from "../../components/Navigation";
 import CartDrawer from "../../components/CartDrawer";
 import FloatingCartButton from "../../components/FloatingCartButton";
 import PageTransition from "../../components/PageTransition";
+import SiteFooter from "../../components/SiteFooter";
 import SmartImage from "../../components/SmartImage";
 import { useAuth } from "../../auth/AuthContext";
 import { useShop } from "../../shop/ShopContext";
@@ -341,6 +342,7 @@ export default function ProductDetailsPage() {
             </div>
           </section>
         ) : null}
+        <SiteFooter />
       </PageTransition>
       <FloatingCartButton />
       <CartDrawer />

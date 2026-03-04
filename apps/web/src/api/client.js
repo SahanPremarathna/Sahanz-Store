@@ -99,6 +99,16 @@ export async function createSellerProduct(payload, token) {
   return response.data;
 }
 
+export async function updateSellerProduct(productId, payload, token) {
+  const response = await apiPatch(`/products/${productId}`, payload, token);
+  return response.data;
+}
+
+export async function deleteSellerProduct(productId, token) {
+  const response = await apiDelete(`/products/${productId}`, token);
+  return response.data;
+}
+
 export async function getOrders(token) {
   const response = await apiGet("/orders", token);
   return response.data;

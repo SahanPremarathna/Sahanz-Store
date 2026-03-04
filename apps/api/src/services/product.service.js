@@ -97,27 +97,29 @@ async function getCatalog() {
 
 async function getSellerProducts(sellerId) {
   return getDataSource().listSellerProductsBySeller(sellerId).then((products) =>
-    products.map((product) => ({
-      id: product.id,
-      sellerId: product.sellerId,
-      sellerName: product.sellerName,
-      categoryId: product.categoryId,
-      title: product.title,
-      slug: product.slug,
-      description: product.description,
-      longDescription: product.longDescription || "",
-      details: product.details || [],
-      ingredients: product.ingredients || [],
-      usageNotes: product.usageNotes || "",
-      storageNotes: product.storageNotes || "",
-      galleryImages: product.galleryImages || [],
-      priceCents: product.priceCents,
-      currency: product.currency,
-      imageUrl: product.imageUrl,
-      inventoryCount: product.inventoryCount,
-      isActive: product.isActive,
-      createdAt: product.createdAt
-    }))
+    products
+      .filter((product) => product.isActive)
+      .map((product) => ({
+        id: product.id,
+        sellerId: product.sellerId,
+        sellerName: product.sellerName,
+        categoryId: product.categoryId,
+        title: product.title,
+        slug: product.slug,
+        description: product.description,
+        longDescription: product.longDescription || "",
+        details: product.details || [],
+        ingredients: product.ingredients || [],
+        usageNotes: product.usageNotes || "",
+        storageNotes: product.storageNotes || "",
+        galleryImages: product.galleryImages || [],
+        priceCents: product.priceCents,
+        currency: product.currency,
+        imageUrl: product.imageUrl,
+        inventoryCount: product.inventoryCount,
+        isActive: product.isActive,
+        createdAt: product.createdAt
+      }))
   );
 }
 
@@ -172,9 +174,65 @@ async function createSellerProduct(input) {
   });
 }
 
+async function updateSellerProduct(sellerId, productId, input) {
+  if (!input.title?.trim()) {
+    throw new Error("Title is required");
+  }
+
+  if (!input.categoryId) {
+    throw new Error("Category is required");
+  }
+
+  if (!input.description?.trim()) {
+    throw new Error("Description is required");
+  }
+
+  if (Number.isNaN(Number(input.priceCents)) || Number(input.priceCents) < 0) {
+    throw new Error("Price must be valid");
+  }
+
+  if (
+    Number.isNaN(Number(input.inventoryCount)) ||
+    Number(input.inventoryCount) < 0
+  ) {
+    throw new Error("Inventory count must be valid");
+  }
+
+  const slug =
+    input.slug ||
+    input.title
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+
+  return getDataSource().updateSellerProduct(sellerId, productId, {
+    categoryId: input.categoryId,
+    title: input.title,
+    slug,
+    description: input.description,
+    longDescription: input.longDescription || "",
+    details: Array.isArray(input.details) ? input.details : [],
+    ingredients: Array.isArray(input.ingredients) ? input.ingredients : [],
+    usageNotes: input.usageNotes || "",
+    storageNotes: input.storageNotes || "",
+    galleryImages: Array.isArray(input.galleryImages) ? input.galleryImages : [],
+    priceCents: Number(input.priceCents),
+    currency: input.currency || "LKR",
+    imageUrl: input.imageUrl || "",
+    inventoryCount: Number(input.inventoryCount)
+  });
+}
+
+async function deleteSellerProduct(sellerId, productId) {
+  return getDataSource().deleteSellerProduct(sellerId, productId);
+}
+
 module.exports = {
   createSellerProduct,
+  deleteSellerProduct,
   getCatalog,
   getCategories,
-  getSellerProducts
+  getSellerProducts,
+  updateSellerProduct
 };

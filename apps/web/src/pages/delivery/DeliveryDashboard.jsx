@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Navigation from "../../components/Navigation";
 import { useAuth } from "../../auth/AuthContext";
 import PageTransition from "../../components/PageTransition";
+import SiteFooter from "../../components/SiteFooter";
 import { getDeliveries } from "../../api/client";
 import { useNotifications } from "../../notifications/NotificationContext";
 
@@ -220,6 +221,7 @@ export default function DeliveryDashboard() {
             })}
           </div>
         </section>
+        <SiteFooter />
       </PageTransition>
     </div>
   );

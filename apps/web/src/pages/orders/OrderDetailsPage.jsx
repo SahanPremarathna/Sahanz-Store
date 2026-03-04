@@ -9,6 +9,7 @@ import {
 import { useAuth } from "../../auth/AuthContext";
 import Navigation from "../../components/Navigation";
 import PageTransition from "../../components/PageTransition";
+import SiteFooter from "../../components/SiteFooter";
 import SmartImage from "../../components/SmartImage";
 import { useNotifications } from "../../notifications/NotificationContext";
 
@@ -602,6 +603,7 @@ export default function OrderDetailsPage() {
             </div>
           </>
         )}
+        <SiteFooter />
       </PageTransition>
     </div>
   );

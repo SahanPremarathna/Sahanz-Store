@@ -13,6 +13,8 @@ import CheckoutPage from "../pages/shop/CheckoutPage";
 import CategoriesPage from "../pages/shop/CategoriesPage";
 import ShopPage from "../pages/shop/ShopPage";
 import SellerDashboard from "../pages/seller/SellerDashboard";
+import SellerListingsPage from "../pages/seller/SellerListingsPage";
+import EditSellerProductPage from "../pages/seller/EditSellerProductPage";
 import DeliveryDashboard from "../pages/delivery/DeliveryDashboard";
 import AuthPage from "../pages/auth/AuthPage";
 
@@ -68,6 +70,22 @@ export default function AppRoutes() {
               element={
                 <ProtectedRoute roles={["seller"]}>
                   <SellerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seller/listings"
+              element={
+                <ProtectedRoute roles={["seller"]}>
+                  <SellerListingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seller/listings/:productId/edit"
+              element={
+                <ProtectedRoute roles={["seller"]}>
+                  <EditSellerProductPage />
                 </ProtectedRoute>
               }
             />

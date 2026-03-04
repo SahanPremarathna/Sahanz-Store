@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Navigation from "../../components/Navigation";
 import { useAuth } from "../../auth/AuthContext";
 import PageTransition from "../../components/PageTransition";
+import SiteFooter from "../../components/SiteFooter";
 import SmartImage from "../../components/SmartImage";
 import {
   createSellerProduct,
@@ -14,6 +15,13 @@ import { useNotifications } from "../../notifications/NotificationContext";
 
 function formatMoney(currency, cents) {
   return `${currency} ${(cents / 100).toFixed(2)}`;
+}
+
+function parseGalleryImages(value) {
+  return value
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 function getOrderStateText(order) {
@@ -38,7 +46,8 @@ export default function SellerDashboard() {
     description: "",
     price: "0",
     inventoryCount: "0",
-    imageUrl: ""
+    imageUrl: "",
+    galleryImages: ""
   });
 
   useEffect(() => {
@@ -87,7 +96,8 @@ export default function SellerDashboard() {
           description: form.description,
           priceCents: Math.round(Number(form.price) * 100),
           inventoryCount: Number(form.inventoryCount),
-          imageUrl: form.imageUrl
+          imageUrl: form.imageUrl,
+          galleryImages: parseGalleryImages(form.galleryImages)
         },
         token
       );
@@ -99,7 +109,8 @@ export default function SellerDashboard() {
         description: "",
         price: "0",
         inventoryCount: "0",
-        imageUrl: ""
+        imageUrl: "",
+        galleryImages: ""
       }));
       setStateMessage("Listing created.");
       notifications.modalSuccess(
@@ -125,6 +136,7 @@ export default function SellerDashboard() {
   const openOrders = orders.filter(
     (order) => order.status !== "delivered" && order.status !== "cancelled"
   ).length;
+  const previewProducts = products.slice(0, 5);
 
   return (
     <div className="layout">
@@ -290,8 +302,22 @@ export default function SellerDashboard() {
                       imageUrl: event.target.value
                     }))
                   }
-                  placeholder="https://..."
+                  placeholder="Main product image"
                   value={form.imageUrl}
+                />
+              </label>
+              <label>
+                Gallery image URLs
+                <textarea
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      galleryImages: event.target.value
+                    }))
+                  }
+                  placeholder={"One image URL per line"}
+                  rows="5"
+                  value={form.galleryImages}
                 />
               </label>
               <button className="primary-button" type="submit">
@@ -306,11 +332,22 @@ export default function SellerDashboard() {
                 <span className="eyebrow">Inventory</span>
                 <h2>Your live listings</h2>
               </div>
-              <span className="muted">{products.length} products</span>
+              <div className="inventory-section-heading">
+                <span className="muted">{products.length} products</span>
+                {products.length > 5 ? (
+                  <Link className="ghost-link inventory-view-all-link" to="/seller/listings">
+                    View all listings
+                  </Link>
+                ) : null}
+              </div>
             </div>
             <div className="inventory-grid">
-              {products.map((product) => (
-                <article className="inventory-card" key={product.id}>
+              {previewProducts.map((product) => (
+                <Link
+                  className="inventory-card inventory-management-card"
+                  key={product.id}
+                  to={`/seller/listings/${product.id}/edit`}
+                >
                   <SmartImage
                     alt={product.title}
                     className="inventory-thumb"
@@ -324,11 +361,12 @@ export default function SellerDashboard() {
                       {product.inventoryCount}
                     </p>
                   </div>
-                </article>
+                </Link>
               ))}
             </div>
           </section>
         </div>
+        <SiteFooter />
       </PageTransition>
     </div>
   );

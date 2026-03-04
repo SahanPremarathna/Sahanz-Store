@@ -45,9 +45,42 @@ async function createProduct(req, res) {
   }
 }
 
+async function updateProduct(req, res) {
+  try {
+    const product = await productService.updateSellerProduct(
+      req.user.id,
+      req.params.productId,
+      req.body || {}
+    );
+    res.json(formatApiResponse(product, "Product updated"));
+  } catch (error) {
+    res.status(400).json({
+      message: "Failed to update product",
+      error: error.message
+    });
+  }
+}
+
+async function deleteProduct(req, res) {
+  try {
+    const product = await productService.deleteSellerProduct(
+      req.user.id,
+      req.params.productId
+    );
+    res.json(formatApiResponse(product, "Product deleted"));
+  } catch (error) {
+    res.status(400).json({
+      message: "Failed to delete product",
+      error: error.message
+    });
+  }
+}
+
 module.exports = {
   createProduct,
+  deleteProduct,
   listCategories,
   listMyProducts,
-  listProducts
+  listProducts,
+  updateProduct
 };

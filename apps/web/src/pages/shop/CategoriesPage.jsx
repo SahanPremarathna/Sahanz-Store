@@ -2,6 +2,7 @@ import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import Navigation from "../../components/Navigation";
 import PageTransition from "../../components/PageTransition";
+import SiteFooter from "../../components/SiteFooter";
 import { useShop } from "../../shop/ShopContext";
 
 export default function CategoriesPage() {
@@ -45,6 +46,7 @@ export default function CategoriesPage() {
             </div>
           )}
         </section>
+        <SiteFooter />
       </PageTransition>
     </div>
   );

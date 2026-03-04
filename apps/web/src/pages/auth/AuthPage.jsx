@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useNotifications } from "../../notifications/NotificationContext";
@@ -27,6 +27,27 @@ function roleLabel(role) {
   return "Customer";
 }
 
+function getPortalAccessLinks(role) {
+  if (role === "seller") {
+    return [
+      { to: "/login", label: "Customer access" },
+      { to: "/login/delivery", label: "Delivery partner access" }
+    ];
+  }
+
+  if (role === "delivery") {
+    return [
+      { to: "/login", label: "Customer access" },
+      { to: "/login/store-owner", label: "Store owner access" }
+    ];
+  }
+
+  return [
+    { to: "/login/store-owner", label: "Store owner access" },
+    { to: "/login/delivery", label: "Delivery partner access" }
+  ];
+}
+
 function createInitialState(role, mode) {
   return {
     identifier: "",
@@ -45,58 +66,119 @@ function createInitialState(role, mode) {
   };
 }
 
-function AuthBackdrop({ role }) {
-  const accent =
-    role === "seller"
-      ? "#0b5d3d"
-      : role === "delivery"
-        ? "#0d4f8b"
-        : "#925f18";
-  const secondary =
-    role === "seller"
-      ? "#d6f5d1"
-      : role === "delivery"
-        ? "#d4ecff"
-        : "#ffe7c2";
+function getAuthScene(role, mode) {
+  if (role === "seller") {
+    return {
+      title: "",
+      copy: "",
+      highlights: []
+    };
+  }
 
-  return (
-    <svg
-      aria-hidden="true"
-      className="auth-art"
-      viewBox="0 0 600 600"
-    >
-      <defs>
-        <linearGradient id={`auth-gradient-${role}`} x1="0%" x2="100%" y1="0%" y2="100%">
-          <stop offset="0%" stopColor={secondary} />
-          <stop offset="100%" stopColor={accent} />
-        </linearGradient>
-      </defs>
-      <rect fill={`url(#auth-gradient-${role})`} height="600" rx="36" width="600" />
-      {role === "seller" ? (
-        <>
-          <path d="M135 170h220l38 58H97l38-58Z" fill="rgba(255,255,255,0.85)" />
-          <rect fill="rgba(255,255,255,0.78)" height="170" rx="24" width="270" x="165" y="240" />
-          <path d="M205 290h190" stroke={accent} strokeWidth="18" />
-          <path d="M240 350h120" stroke={accent} strokeLinecap="round" strokeWidth="20" />
-        </>
-      ) : role === "delivery" ? (
-        <>
-          <rect fill="rgba(255,255,255,0.82)" height="140" rx="28" width="250" x="165" y="250" />
-          <path d="M415 300h55l30 48h-85Z" fill="rgba(255,255,255,0.72)" />
-          <circle cx="240" cy="410" fill="#12344d" r="34" />
-          <circle cx="430" cy="410" fill="#12344d" r="34" />
-          <path d="M110 180c62-82 200-118 318-54" fill="none" stroke="rgba(255,255,255,0.48)" strokeWidth="16" />
-        </>
-      ) : (
-        <>
-          <circle cx="180" cy="180" fill="rgba(255,255,255,0.8)" r="72" />
-          <path d="M284 290h188" stroke="rgba(255,255,255,0.86)" strokeLinecap="round" strokeWidth="30" />
-          <path d="M210 360h240" stroke="rgba(255,255,255,0.7)" strokeLinecap="round" strokeWidth="24" />
-          <path d="M150 460c44-52 112-82 188-82s144 30 188 82" fill="none" stroke="rgba(255,255,255,0.62)" strokeWidth="18" />
-        </>
-      )}
-    </svg>
-  );
+  if (role === "delivery") {
+    return {
+      title: "",
+      copy: "",
+      highlights: []
+    };
+  }
+
+  return {
+    title: "",
+    copy: "",
+    highlights: []
+  };
+}
+
+function getFieldGroups(role, mode) {
+  if (mode === "login") {
+    return [
+      {
+        title: "Access",
+        fields: [
+          {
+            key: "identifier",
+            label: "Email / Username",
+            autoComplete: "username",
+            type: "text"
+          },
+          {
+            key: "password",
+            label: "Password",
+            autoComplete: "current-password",
+            type: "password"
+          }
+        ]
+      }
+    ];
+  }
+
+  const common = {
+    title: "Account",
+    fields: [
+      { key: "username", label: "Username", autoComplete: "username", type: "text" },
+      {
+        key: "name",
+        label: role === "seller" ? "Owner name" : "Full name",
+        autoComplete: "name",
+        type: "text"
+      },
+      { key: "email", label: "Email", autoComplete: "email", type: "email" },
+      {
+        key: "password",
+        label: "Password",
+        autoComplete: "new-password",
+        type: "password"
+      }
+    ]
+  };
+
+  if (role === "customer") {
+    return [
+      common,
+      {
+        title: "Contact",
+        fields: [
+          { key: "phone", label: "Phone number", autoComplete: "tel", type: "text" },
+          { key: "address", label: "Address", rows: 3, type: "textarea" }
+        ]
+      }
+    ];
+  }
+
+  if (role === "seller") {
+    return [
+      common,
+      {
+        title: "Store",
+        fields: [
+          { key: "businessName", label: "Store name", type: "text" },
+          { key: "businessAddress", label: "Store location", rows: 3, type: "textarea" },
+          { key: "phone", label: "Contact details", type: "text" },
+          { key: "serviceArea", label: "Service area", type: "text" }
+        ]
+      }
+    ];
+  }
+
+  return [
+    common,
+    {
+      title: "Delivery",
+      fields: [
+        { key: "phone", label: "Phone number", autoComplete: "tel", type: "text" },
+        { key: "vehicleType", label: "Vehicle details", type: "text" },
+        { key: "serviceArea", label: "Service area", type: "text" }
+      ]
+    }
+  ];
+}
+
+function AuthBackdrop({ role }) {
+  const source =
+    role === "seller" ? "/shop_svg.svg" : role === "delivery" ? "/delivery_svg.svg" : "/login_svg.svg";
+
+  return <img alt="" aria-hidden="true" className="auth-art" src={source} />;
 }
 
 export default function AuthPage({ defaultMode = "login", role = "customer" }) {
@@ -110,6 +192,9 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
     setForm(createInitialState(role, defaultMode));
   }, [defaultMode, role]);
 
+  const scene = useMemo(() => getAuthScene(role, form.mode), [role, form.mode]);
+  const fieldGroups = useMemo(() => getFieldGroups(role, form.mode), [role, form.mode]);
+  const portalAccessLinks = useMemo(() => getPortalAccessLinks(role), [role]);
   if (user?.role === role) {
     return <Navigate to={getPortalPath(role)} replace />;
   }
@@ -147,8 +232,7 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
               vehicleType: form.vehicleType
             };
 
-      const activeUser =
-        form.mode === "login" ? await login(payload) : await register(payload);
+      const activeUser = form.mode === "login" ? await login(payload) : await register(payload);
 
       notifications.success(
         `${activeUser.name} is now signed in.`,
@@ -162,226 +246,126 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
     }
   }
 
-  const isCustomer = role === "customer";
-  const title =
-    role === "seller"
-      ? "Seller portal access"
-      : role === "delivery"
-        ? "Delivery portal access"
-        : form.mode === "signup"
-          ? "Create your customer account"
-          : "Sign in to continue shopping";
-  const copy =
-    role === "seller"
-      ? "Manage your store, inventory, and incoming orders from a dedicated commerce workspace."
-      : role === "delivery"
-        ? "Accept delivery tasks, inspect routes, and update rider status from a logistics workspace."
-        : "Use your email or username and password to access your customer account.";
-
   return (
-    <div className={`layout auth-layout auth-${role}`}>
-      <section className="auth-shell">
-        <div className="auth-panel auth-art-panel">
-          <div className="auth-copy">
-            <span className="eyebrow">{roleLabel(role)}</span>
-            <h1>{title}</h1>
-            <p className="hero-copy">{copy}</p>
-          </div>
-          <AuthBackdrop role={role} />
+    <div className={`layout auth-layout auth-${role} auth-${form.mode}`}>
+      <div className="auth-page-topbar">
+        <div className="auth-brand-lockup">
+          <Link aria-label="Sahanz Store" className="brand" to="/">
+            <img alt="" aria-hidden="true" className="brand-logo" src="/my_logo.png" />
+          </Link>
         </div>
+      </div>
+      <section className={`auth-shell ${form.mode === "login" ? "auth-shell-login" : ""}`}>
+        {scene.title || scene.copy || scene.highlights.length ? (
+          <div className="auth-panel auth-art-panel">
+            <div className="auth-copy">
+              <h1>{scene.title}</h1>
+              <p className="hero-copy">{scene.copy}</p>
+            </div>
+
+            {scene.highlights.length ? (
+              <div className="auth-highlight-grid">
+                {scene.highlights.map((item) => (
+                  <article className="auth-highlight-card" key={item}>
+                    <span className="auth-highlight-dot" />
+                    <strong>{item}</strong>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+
+            <AuthBackdrop role={role} />
+          </div>
+        ) : (
+          <div className="auth-panel auth-art-panel auth-art-panel-minimal">
+            <AuthBackdrop role={role} />
+          </div>
+        )}
 
         <div className="auth-panel auth-form-panel">
-          <div className="auth-header">
-            <Link className="brand" to={role === "customer" ? "/" : "/login"}>
-              Sahanz Store
-            </Link>
-            {!isCustomer ? (
-              <div className="auth-tabs">
+          <div className="auth-form-card">
+            <div className="auth-form-head">
+              <div>
+                <span className="eyebrow">{roleLabel(role)}</span>
+                <h2>{form.mode === "login" ? "Access account" : "Create account"}</h2>
+              </div>
+              <div className="auth-mode-switch">
                 <button
-                  className={`ghost-button ${form.mode === "login" ? "active-tab" : ""}`}
+                  className={form.mode === "login" ? "active-tab" : ""}
                   onClick={() => updateField("mode", "login")}
                   type="button"
                 >
                   Log In
                 </button>
                 <button
-                  className={`ghost-button ${form.mode === "signup" ? "active-tab" : ""}`}
+                  className={form.mode === "signup" ? "active-tab" : ""}
                   onClick={() => updateField("mode", "signup")}
                   type="button"
                 >
-                  Register
+                  Sign Up
                 </button>
               </div>
-            ) : null}
-          </div>
-
-          <form className="stack auth-form" onSubmit={handleSubmit}>
-            {form.mode === "login" ? (
-              <>
-                <label>
-                  Email / Username
-                  <input
-                    autoComplete="username"
-                    onChange={(event) => updateField("identifier", event.target.value)}
-                    value={form.identifier}
-                  />
-                </label>
-                <label>
-                  Password
-                  <input
-                    autoComplete={isCustomer ? "current-password" : "current-password"}
-                    onChange={(event) => updateField("password", event.target.value)}
-                    type="password"
-                    value={form.password}
-                  />
-                </label>
-                <button className="primary-button" disabled={busy} type="submit">
-                  {busy ? "Signing in..." : "Sign In"}
-                </button>
-              </>
-            ) : (
-              <>
-                <label>
-                  Username
-                  <input
-                    autoComplete="username"
-                    onChange={(event) => updateField("username", event.target.value)}
-                    value={form.username}
-                  />
-                </label>
-                <label>
-                  {role === "seller" ? "Owner name" : "Full name"}
-                  <input
-                    autoComplete="name"
-                    onChange={(event) => updateField("name", event.target.value)}
-                    value={form.name}
-                  />
-                </label>
-                <label>
-                  Email
-                  <input
-                    autoComplete="email"
-                    onChange={(event) => updateField("email", event.target.value)}
-                    type="email"
-                    value={form.email}
-                  />
-                </label>
-                <label>
-                  Password
-                  <input
-                    autoComplete="new-password"
-                    onChange={(event) => updateField("password", event.target.value)}
-                    type="password"
-                    value={form.password}
-                  />
-                </label>
-                {(role === "customer" || role === "delivery") && (
-                  <label>
-                    Phone number
-                    <input
-                      autoComplete="tel"
-                      onChange={(event) => updateField("phone", event.target.value)}
-                      value={form.phone}
-                    />
-                  </label>
-                )}
-                {role === "customer" ? (
-                  <label>
-                    Address
-                    <textarea
-                      onChange={(event) => updateField("address", event.target.value)}
-                      rows="3"
-                      value={form.address}
-                    />
-                  </label>
-                ) : null}
-                {role === "seller" ? (
-                  <>
-                    <label>
-                      Store name
-                      <input
-                        onChange={(event) => updateField("businessName", event.target.value)}
-                        value={form.businessName}
-                      />
-                    </label>
-                    <label>
-                      Store location
-                      <textarea
-                        onChange={(event) => updateField("businessAddress", event.target.value)}
-                        rows="3"
-                        value={form.businessAddress}
-                      />
-                    </label>
-                    <label>
-                      Contact details
-                      <input
-                        onChange={(event) => updateField("phone", event.target.value)}
-                        value={form.phone}
-                      />
-                    </label>
-                    <label>
-                      Service area
-                      <input
-                        onChange={(event) => updateField("serviceArea", event.target.value)}
-                        value={form.serviceArea}
-                      />
-                    </label>
-                  </>
-                ) : null}
-                {role === "delivery" ? (
-                  <>
-                    <label>
-                      Vehicle details
-                      <input
-                        onChange={(event) => updateField("vehicleType", event.target.value)}
-                        value={form.vehicleType}
-                      />
-                    </label>
-                    <label>
-                      Service area
-                      <input
-                        onChange={(event) => updateField("serviceArea", event.target.value)}
-                        value={form.serviceArea}
-                      />
-                    </label>
-                  </>
-                ) : null}
-                <button className="primary-button" disabled={busy} type="submit">
-                  {busy ? "Creating account..." : "Create Account"}
-                </button>
-              </>
-            )}
-          </form>
-
-          {isCustomer ? (
-            <>
-              <div className="auth-footer">
-                {form.mode === "login" ? (
-                  <p>
-                    Don't have an account? <Link to="/signup">Sign Up</Link>
-                  </p>
-                ) : (
-                  <p>
-                    Already have an account? <Link to="/login">Log In</Link>
-                  </p>
-                )}
-              </div>
-              {form.mode === "login" ? (
-                <div className="auth-role-links">
-                  <Link to="/login/store-owner">Are you a Store Owner?</Link>
-                  <Link to="/login/delivery">Are you a Delivery Partner?</Link>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <div className="auth-footer">
-              <p>
-                Looking for the customer storefront? <Link to="/login">Customer login</Link>
-              </p>
             </div>
-          )}
+
+            <form className="stack auth-form" onSubmit={handleSubmit}>
+              {fieldGroups.map((group) => (
+                <section className="auth-form-section" key={group.title}>
+                  <div className="auth-form-section-head">
+                    <span className="auth-form-section-title">{group.title}</span>
+                  </div>
+                  <div className="auth-form-grid">
+                    {group.fields.map((field) => (
+                      <label
+                        className={field.type === "textarea" ? "auth-field auth-field-wide" : "auth-field"}
+                        key={field.key}
+                      >
+                        <span>{field.label}</span>
+                        {field.type === "textarea" ? (
+                          <textarea
+                            autoComplete={field.autoComplete}
+                            onChange={(event) => updateField(field.key, event.target.value)}
+                            rows={field.rows || 3}
+                            value={form[field.key]}
+                          />
+                        ) : (
+                          <input
+                            autoComplete={field.autoComplete}
+                            onChange={(event) => updateField(field.key, event.target.value)}
+                            type={field.type}
+                            value={form[field.key]}
+                          />
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              ))}
+
+              <div className="auth-submit-row">
+                <button className="primary-button auth-submit-button" disabled={busy} type="submit">
+                  {busy
+                    ? form.mode === "login"
+                      ? "Signing in..."
+                      : "Creating account..."
+                    : form.mode === "login"
+                      ? "Continue"
+                      : "Create Account"}
+                </button>
+              </div>
+            </form>
+
+          </div>
         </div>
       </section>
+      {portalAccessLinks.length ? (
+        <div className="auth-role-links auth-role-links-page">
+          {portalAccessLinks.map((item) => (
+            <Link key={item.to} to={item.to}>
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

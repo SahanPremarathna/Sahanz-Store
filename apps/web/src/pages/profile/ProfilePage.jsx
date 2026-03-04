@@ -4,6 +4,7 @@ import { getOrders } from "../../api/client";
 import Navigation from "../../components/Navigation";
 import SmartImage from "../../components/SmartImage";
 import PageTransition from "../../components/PageTransition";
+import SiteFooter from "../../components/SiteFooter";
 import { useAuth } from "../../auth/AuthContext";
 import { useNotifications } from "../../notifications/NotificationContext";
 
@@ -251,6 +252,13 @@ export default function ProfilePage() {
     <div className="layout">
       <PageTransition className="page-shell">
         <Navigation />
+        {user.role === "customer" ? (
+          <div className="profile-top-link-row">
+            <Link className="ghost-link" to="/">
+              Back to home store
+            </Link>
+          </div>
+        ) : null}
         <section className="seller-hero portal-hero">
           <div className="profile-hero">
             <SmartImage
@@ -494,7 +502,7 @@ export default function ProfilePage() {
                     onClick={() => handleDangerousAction(deleteListings)}
                     type="button"
                   >
-                    Delete all listings
+                    Delete all store listings
                   </button>
                   <button
                     className="ghost-button danger-button"
@@ -523,6 +531,7 @@ export default function ProfilePage() {
             <p className="muted">Open More Settings to access role-specific account actions.</p>
           )}
         </section>
+        <SiteFooter />
       </PageTransition>
     </div>
   );

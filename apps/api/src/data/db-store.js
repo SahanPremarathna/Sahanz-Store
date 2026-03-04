@@ -599,6 +599,118 @@ async function createSellerProduct(input) {
   return mapProduct(row, seller?.businessName || seller?.name || "Seller");
 }
 
+async function updateSellerProduct(sellerId, productId, input) {
+  const supabase = ensureSupabase();
+  const existing = await supabase
+    .from("seller_products")
+    .select("id")
+    .eq("id", productId)
+    .eq("seller_id", sellerId)
+    .eq("is_active", true)
+    .maybeSingle();
+  const current = requireSingle(existing, "Failed to load product");
+
+  if (!current) {
+    throw new Error("Product not found");
+  }
+
+  const payload = {
+    updated_at: new Date().toISOString()
+  };
+
+  if (input.categoryId) {
+    payload.category_id = input.categoryId;
+  }
+
+  if (typeof input.title === "string") {
+    payload.title = input.title;
+  }
+
+  if (typeof input.slug === "string" && input.slug.trim()) {
+    payload.slug = input.slug.trim();
+  }
+
+  if (typeof input.description === "string") {
+    payload.description = input.description;
+  }
+
+  if (typeof input.longDescription === "string") {
+    payload.long_description = input.longDescription;
+  }
+
+  if (Array.isArray(input.details)) {
+    payload.details = input.details;
+  }
+
+  if (Array.isArray(input.ingredients)) {
+    payload.ingredients = input.ingredients;
+  }
+
+  if (typeof input.usageNotes === "string") {
+    payload.usage_notes = input.usageNotes;
+  }
+
+  if (typeof input.storageNotes === "string") {
+    payload.storage_notes = input.storageNotes;
+  }
+
+  if (Array.isArray(input.galleryImages)) {
+    payload.gallery_images = input.galleryImages;
+  }
+
+  if (typeof input.priceCents === "number") {
+    payload.price_cents = input.priceCents;
+  }
+
+  if (typeof input.currency === "string") {
+    payload.currency = input.currency;
+  }
+
+  if (typeof input.imageUrl === "string") {
+    payload.image_url = input.imageUrl;
+  }
+
+  if (typeof input.inventoryCount === "number") {
+    payload.inventory_count = input.inventoryCount;
+  }
+
+  const updateResult = await supabase
+    .from("seller_products")
+    .update(payload)
+    .eq("id", productId)
+    .eq("seller_id", sellerId)
+    .eq("is_active", true)
+    .select("id, seller_id, category_id, title, slug, description, long_description, details, ingredients, usage_notes, storage_notes, gallery_images, price_cents, currency, image_url, inventory_count, is_active, sort_order, created_at")
+    .single();
+  const row = requireSingle(updateResult, "Failed to update product");
+  const seller = await getUserById(sellerId);
+
+  return mapProduct(row, seller?.businessName || seller?.name || "Seller");
+}
+
+async function deleteSellerProduct(sellerId, productId) {
+  const supabase = ensureSupabase();
+  const updateResult = await supabase
+    .from("seller_products")
+    .update({
+      is_active: false,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", productId)
+    .eq("seller_id", sellerId)
+    .eq("is_active", true)
+    .select("id, seller_id, category_id, title, slug, description, long_description, details, ingredients, usage_notes, storage_notes, gallery_images, price_cents, currency, image_url, inventory_count, is_active, sort_order, created_at")
+    .maybeSingle();
+  const row = requireSingle(updateResult, "Failed to delete product");
+
+  if (!row) {
+    throw new Error("Product not found");
+  }
+
+  const seller = await getUserById(sellerId);
+  return mapProduct(row, seller?.businessName || seller?.name || "Seller");
+}
+
 async function createOrder(input) {
   const supabase = ensureSupabase();
   const customer = await getUserById(input.customerId);
@@ -1030,7 +1142,14 @@ async function updateDeliveryTaskStatus(taskId, status, riderId) {
 
 async function deleteListingsForSeller(sellerId) {
   const supabase = ensureSupabase();
-  const result = await supabase.from("seller_products").delete().eq("seller_id", sellerId);
+  const result = await supabase
+    .from("seller_products")
+    .update({
+      is_active: false,
+      updated_at: new Date().toISOString()
+    })
+    .eq("seller_id", sellerId)
+    .eq("is_active", true);
 
   if (result.error) {
     throw new Error(`Failed to delete listings: ${result.error.message}`);
@@ -1061,6 +1180,7 @@ module.exports = {
   cancelOrder,
   createSellerProduct,
   createUser,
+  deleteSellerProduct,
   deleteListingsForSeller,
   deleteStoreByOwner,
   deleteUserAccount,
@@ -1073,6 +1193,7 @@ module.exports = {
   listSellerProductsBySeller,
   listUsers,
   updateSellerOrderProgress,
+  updateSellerProduct,
   updateUserProfile,
   updateDeliveryTaskStatus
 };

@@ -14,8 +14,38 @@ function composeAddress(parts = {}) {
 
 const categories = [
   { id: "cat-groceries", name: "Groceries", slug: "groceries", sortOrder: 1 },
-  { id: "cat-beverages", name: "Beverages", slug: "beverages", sortOrder: 2 },
-  { id: "cat-household", name: "Household", slug: "household", sortOrder: 3 }
+  { id: "cat-fresh-produce", name: "Fresh Produce", slug: "fresh-produce", sortOrder: 2 },
+  { id: "cat-dairy-eggs", name: "Dairy & Eggs", slug: "dairy-eggs", sortOrder: 3 },
+  { id: "cat-bakery", name: "Bakery", slug: "bakery", sortOrder: 4 },
+  { id: "cat-meat-seafood", name: "Meat & Seafood", slug: "meat-seafood", sortOrder: 5 },
+  { id: "cat-beverages", name: "Beverages", slug: "beverages", sortOrder: 6 },
+  { id: "cat-snacks", name: "Snacks", slug: "snacks", sortOrder: 7 },
+  { id: "cat-frozen-foods", name: "Frozen Foods", slug: "frozen-foods", sortOrder: 8 },
+  { id: "cat-household", name: "Household", slug: "household", sortOrder: 9 },
+  { id: "cat-personal-care", name: "Personal Care", slug: "personal-care", sortOrder: 10 },
+  { id: "cat-baby-kids", name: "Baby & Kids", slug: "baby-kids", sortOrder: 11 },
+  { id: "cat-pet-supplies", name: "Pet Supplies", slug: "pet-supplies", sortOrder: 12 },
+  { id: "cat-health-wellness", name: "Health & Wellness", slug: "health-wellness", sortOrder: 13 },
+  { id: "cat-pharmacy", name: "Pharmacy", slug: "pharmacy", sortOrder: 14 },
+  {
+    id: "cat-electronics-accessories",
+    name: "Electronics & Accessories",
+    slug: "electronics-accessories",
+    sortOrder: 15
+  },
+  {
+    id: "cat-office-stationery",
+    name: "Office & Stationery",
+    slug: "office-stationery",
+    sortOrder: 16
+  },
+  { id: "cat-home-living", name: "Home & Living", slug: "home-living", sortOrder: 17 },
+  {
+    id: "cat-adult-wellness",
+    name: "Adult Wellness",
+    slug: "adult-wellness",
+    sortOrder: 18
+  }
 ];
 
 const users = [
@@ -947,6 +977,97 @@ function createSellerProduct(input) {
   return { ...product };
 }
 
+function updateSellerProduct(sellerId, productId, input) {
+  const product = sellerProducts.find(
+    (entry) => entry.id === productId && entry.sellerId === sellerId && entry.isActive
+  );
+
+  if (!product) {
+    throw new Error("Product not found");
+  }
+
+  if (input.categoryId) {
+    const category = categories.find((entry) => entry.id === input.categoryId);
+
+    if (!category) {
+      throw new Error("Category not found");
+    }
+
+    product.categoryId = input.categoryId;
+  }
+
+  if (typeof input.title === "string") {
+    product.title = input.title;
+  }
+
+  if (typeof input.slug === "string" && input.slug.trim()) {
+    product.slug = input.slug.trim();
+  }
+
+  if (typeof input.description === "string") {
+    product.description = input.description;
+  }
+
+  if (typeof input.longDescription === "string") {
+    product.longDescription = input.longDescription;
+  }
+
+  if (Array.isArray(input.details)) {
+    product.details = input.details;
+  }
+
+  if (Array.isArray(input.ingredients)) {
+    product.ingredients = input.ingredients;
+  }
+
+  if (typeof input.usageNotes === "string") {
+    product.usageNotes = input.usageNotes;
+  }
+
+  if (typeof input.storageNotes === "string") {
+    product.storageNotes = input.storageNotes;
+  }
+
+  if (Array.isArray(input.galleryImages)) {
+    product.galleryImages = input.galleryImages;
+  }
+
+  if (typeof input.priceCents === "number") {
+    product.priceCents = input.priceCents;
+  }
+
+  if (typeof input.currency === "string") {
+    product.currency = input.currency;
+  }
+
+  if (typeof input.imageUrl === "string") {
+    product.imageUrl = input.imageUrl;
+  }
+
+  if (typeof input.inventoryCount === "number") {
+    product.inventoryCount = input.inventoryCount;
+  }
+
+  product.updatedAt = new Date().toISOString();
+
+  return { ...product };
+}
+
+function deleteSellerProduct(sellerId, productId) {
+  const product = sellerProducts.find(
+    (entry) => entry.id === productId && entry.sellerId === sellerId && entry.isActive
+  );
+
+  if (!product) {
+    throw new Error("Product not found");
+  }
+
+  product.isActive = false;
+  product.updatedAt = new Date().toISOString();
+
+  return { ...product };
+}
+
 function createOrder(input) {
   const customer = getUserRecordById(input.customerId);
   let sellerId = null;
@@ -1287,6 +1408,7 @@ module.exports = {
   cancelOrder,
   createSellerProduct,
   createUser,
+  deleteSellerProduct,
   deleteListingsForSeller,
   deleteStoreByOwner,
   deleteUserAccount,
@@ -1298,6 +1420,7 @@ module.exports = {
   listSellerProductsBySeller,
   listUsers,
   updateSellerOrderProgress,
+  updateSellerProduct,
   updateUserProfile,
   updateDeliveryTaskStatus
 };

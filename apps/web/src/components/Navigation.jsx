@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useShop } from "../shop/ShopContext";
+import { getCategories } from "../api/client";
 
 function ProfileBadge({ user }) {
   const initials = useMemo(
@@ -23,6 +24,7 @@ export default function Navigation() {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const {
+    catalog,
     filters,
     updateFilters,
     resetFilters
@@ -39,10 +41,23 @@ export default function Navigation() {
     dateAdded: filters.dateAdded,
     inStockOnly: filters.inStockOnly
   });
+  const [categories, setCategories] = useState([]);
   const isCustomerView =
     (!user || user.role === "customer") &&
     !location.pathname.startsWith("/seller") &&
     !location.pathname.startsWith("/delivery");
+  const defaultMaxPriceCents = useMemo(() => {
+    const allProducts = catalog.flatMap((category) => category.products);
+    return allProducts.length
+      ? Math.max(...allProducts.map((product) => product.priceCents))
+      : 0;
+  }, [catalog]);
+  const hasAppliedFilters =
+    Boolean(filters.category) ||
+    Number(filters.minPriceCents) > 0 ||
+    Number(filters.maxPriceCents) !== Number(defaultMaxPriceCents) ||
+    filters.dateAdded !== "all" ||
+    filters.inStockOnly;
 
   useEffect(() => {
     setSearchDraft(filters.searchTerm);
@@ -63,6 +78,26 @@ export default function Navigation() {
     filters.maxPriceCents,
     filters.minPriceCents
   ]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getCategories()
+      .then((categoryData) => {
+        if (isMounted) {
+          setCategories(categoryData);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setCategories([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   function handleLogout() {
     logout();
@@ -131,17 +166,10 @@ export default function Navigation() {
 
   return (
     <header className="topbar">
-      <div>
-        <Link className="brand" to={user?.role === "seller" ? "/seller" : user?.role === "delivery" ? "/delivery" : "/"}>
-          Sahanz Store
+      <div className="brand-lockup">
+        <Link aria-label="Sahanz Store" className="brand" to="/">
+          <img alt="" aria-hidden="true" className="brand-logo" src="/my_logo.png" />
         </Link>
-        <p className="brand-tagline">
-          {user?.role === "seller"
-            ? "Seller portal for store management and inventory control."
-            : user?.role === "delivery"
-              ? "Delivery portal for active tasks, routes, and status updates."
-              : "Fresh picks. Fast checkout."}
-        </p>
       </div>
 
       <div className="nav-shell">
@@ -193,7 +221,7 @@ export default function Navigation() {
                 </button>
               </form>
               <button
-                className="filter-toggle"
+                className={`filter-toggle ${hasAppliedFilters ? "has-active-filters" : ""}`}
                 onClick={() => {
                   if (showFilters && !isFilterClosing) {
                     closeFilters();
@@ -204,7 +232,35 @@ export default function Navigation() {
                 }}
                 type="button"
               >
-                Filter
+                <span>Filter</span>
+                {hasAppliedFilters ? (
+                  <span className="filter-toggle-status">
+                    <span aria-hidden="true" className="filter-toggle-badge">
+                      !
+                    </span>
+                    <span className="filter-toggle-label">Applied filters</span>
+                    <span
+                      aria-label="Clear applied filters"
+                      className="filter-toggle-clear"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        resetFilters();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          resetFilters();
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      ×
+                    </span>
+                  </span>
+                ) : null}
               </button>
               {shouldRenderFilters ? (
                 <div
@@ -223,9 +279,11 @@ export default function Navigation() {
                       value={filterDraft.category}
                     >
                       <option value="">All categories</option>
-                      <option value="groceries">Groceries</option>
-                      <option value="beverages">Beverages</option>
-                      <option value="household">Household</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.slug}>
+                          {category.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label>
@@ -349,7 +407,9 @@ export default function Navigation() {
           <div className="auth-cluster">
             {user ? (
               <>
-                <span className="pill">{user.name}</span>
+                <Link className="pill" to="/profile">
+                  {user.name}
+                </Link>
                 <button className="ghost-button" onClick={handleLogout} type="button">
                   Logout
                 </button>

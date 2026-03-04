@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import CheckoutMap from "../../components/CheckoutMap";
 import Navigation from "../../components/Navigation";
 import PageTransition from "../../components/PageTransition";
+import SiteFooter from "../../components/SiteFooter";
 import SmartImage from "../../components/SmartImage";
 import { useAuth } from "../../auth/AuthContext";
 import { useNotifications } from "../../notifications/NotificationContext";
@@ -355,6 +356,7 @@ export default function CheckoutPage() {
             </div>
           </section>
         </div>
+        <SiteFooter />
       </PageTransition>
     </div>
   );
