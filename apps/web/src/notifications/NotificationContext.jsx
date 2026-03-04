@@ -51,7 +51,7 @@ export function NotificationProvider({ children }) {
   );
 
   const showModal = useCallback(
-    ({ message, type = "info", title = "", actions }) => {
+    ({ message, type = "info", title = "", actions, illustration = null }) => {
       const resolvedActions =
         actions?.length
           ? actions.map((action) => normalizeModalAction(action, dismissModal))
@@ -70,7 +70,8 @@ export function NotificationProvider({ children }) {
         message,
         type,
         title,
-        actions: resolvedActions
+        actions: resolvedActions,
+        illustration
       });
     },
     [dismissModal]
@@ -92,14 +93,14 @@ export function NotificationProvider({ children }) {
         notify({ message, title, type: "info" }),
       warning: (message, title = "Attention") =>
         notify({ message, title, type: "warning" }),
-      modalSuccess: (message, title = "Success", actions) =>
-        showModal({ message, title, type: "success", actions }),
-      modalError: (message, title = "Error", actions) =>
-        showModal({ message, title, type: "error", actions }),
-      modalInfo: (message, title = "Info", actions) =>
-        showModal({ message, title, type: "info", actions }),
-      modalWarning: (message, title = "Attention", actions) =>
-        showModal({ message, title, type: "warning", actions })
+      modalSuccess: (message, title = "Success", actions, illustration) =>
+        showModal({ message, title, type: "success", actions, illustration }),
+      modalError: (message, title = "Error", actions, illustration) =>
+        showModal({ message, title, type: "error", actions, illustration }),
+      modalInfo: (message, title = "Info", actions, illustration) =>
+        showModal({ message, title, type: "info", actions, illustration }),
+      modalWarning: (message, title = "Attention", actions, illustration) =>
+        showModal({ message, title, type: "warning", actions, illustration })
     }),
     [dismissModal, dismissToast, modal, notify, showModal, toasts]
   );
@@ -168,6 +169,11 @@ export function NotificationViewport() {
             className={`notice-modal notice-${context.modal.type}`}
             role="dialog"
           >
+            {context.modal.illustration ? (
+              <div aria-hidden="true" className="notice-illustration">
+                {context.modal.illustration}
+              </div>
+            ) : null}
             <div className="toast-copy">
               <strong id="main-notice-title">{context.modal.title}</strong>
               <p>{context.modal.message}</p>

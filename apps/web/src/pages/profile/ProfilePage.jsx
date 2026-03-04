@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getOrders } from "../../api/client";
 import Navigation from "../../components/Navigation";
 import SmartImage from "../../components/SmartImage";
 import PageTransition from "../../components/PageTransition";
 import { useAuth } from "../../auth/AuthContext";
 import { useNotifications } from "../../notifications/NotificationContext";
-import OrderProgress from "../../components/OrderProgress";
 
 function createFormState(user) {
   return {
     name: user?.name || "",
+    username: user?.username || "",
     email: user?.email || "",
     phone: user?.phone || "",
     address: user?.address || "",
@@ -29,7 +29,7 @@ function roleHeading(role) {
   }
 
   if (role === "delivery") {
-    return "Rider profile";
+    return "Delivery partner profile";
   }
 
   return "Customer profile";
@@ -39,17 +39,101 @@ function normalizeOrdersFromProfile(profile) {
   return Array.isArray(profile?.recentOrders) ? profile.recentOrders : null;
 }
 
+function getOrderStateMeta(order, role) {
+  if (order.status === "cancelled" || order.deliveryStatus === "cancelled") {
+    return {
+      label: "Cancelled",
+      description: order.cancellationReason
+        ? `Reason: ${order.cancellationReason}`
+        : "This order was cancelled.",
+      className: "cancelled"
+    };
+  }
+
+  if (order.status === "delivered" || order.deliveryStatus === "delivered") {
+    return {
+      label: "Delivered",
+      description: "The order has reached its destination.",
+      className: "delivered"
+    };
+  }
+
+  if (order.deliveryStatus === "in_transit" || order.status === "out_for_delivery") {
+    return {
+      label: role === "delivery" ? "Out for delivery" : "On the way",
+      description: "The order is currently on the road.",
+      className: "in_transit"
+    };
+  }
+
+  if (order.deliveryStatus === "picked_up") {
+    return {
+      label: "Picked up",
+      description: "The rider has collected the order.",
+      className: "picked_up"
+    };
+  }
+
+  if (order.deliveryStatus === "assigned") {
+    return {
+      label: "Rider assigned",
+      description: "A rider is assigned and preparing for pickup.",
+      className: "assigned"
+    };
+  }
+
+  if (order.status === "processing") {
+    return {
+      label: "Preparing order",
+      description: "The seller is getting the items ready.",
+      className: "processing"
+    };
+  }
+
+  return {
+    label: "Waiting for confirmation",
+    description: "The seller has not confirmed the order yet.",
+    className: "pending"
+  };
+}
+
+function formatOrderStateLine(order, role) {
+  const stateMeta = getOrderStateMeta(order, role);
+  const riderLabel =
+    order.status === "cancelled" || order.deliveryStatus === "cancelled"
+      ? order.cancelledByRole
+        ? `Cancelled by: ${order.cancelledByRole}`
+        : "Cancelled"
+      : order.riderName
+        ? `Rider: ${order.riderName}`
+        : "Rider pending";
+
+  return `${stateMeta.label} • ${riderLabel}`;
+}
+
 export default function ProfilePage() {
-  const { loading, refreshProfile, saveProfile, user } = useAuth();
+  const navigate = useNavigate();
+  const {
+    deleteAccount,
+    deleteListings,
+    deleteStore,
+    loading,
+    logout,
+    refreshProfile,
+    saveProfile,
+    token,
+    user
+  } = useAuth();
   const notifications = useNotifications();
   const [form, setForm] = useState(createFormState(user));
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState("Loading profile...");
   const [ordersStatus, setOrdersStatus] = useState("Loading orders...");
   const [saving, setSaving] = useState(false);
+  const [showMoreSettings, setShowMoreSettings] = useState(false);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !token) {
       return;
     }
 
@@ -57,7 +141,7 @@ export default function ProfilePage() {
     setStatus("Loading profile...");
     setOrdersStatus("Loading orders...");
 
-    refreshProfile(user)
+    refreshProfile()
       .then((profile) => {
         if (!isMounted || !profile) {
           return;
@@ -74,7 +158,7 @@ export default function ProfilePage() {
           return;
         }
 
-        return getOrders(profile).then((loadedOrders) => {
+        return getOrders(token).then((loadedOrders) => {
           if (!isMounted) {
             return;
           }
@@ -90,31 +174,12 @@ export default function ProfilePage() {
 
         setStatus(`Failed to load profile: ${error.message}`);
         notifications.error(error.message, "Profile load failed");
-
-        getOrders(user)
-          .then((loadedOrders) => {
-            if (!isMounted) {
-              return;
-            }
-
-            setOrders(loadedOrders);
-            setOrdersStatus(loadedOrders.length ? "" : "No related orders yet.");
-          })
-          .catch((ordersError) => {
-            if (!isMounted) {
-              return;
-            }
-
-            setOrders([]);
-            setOrdersStatus(`Failed to load orders: ${ordersError.message}`);
-            notifications.error(ordersError.message, "Orders load failed");
-          });
       });
 
     return () => {
       isMounted = false;
     };
-  }, [refreshProfile, user]);
+  }, [notifications, refreshProfile, token, user]);
 
   useEffect(() => {
     setForm(createFormState(user));
@@ -153,6 +218,18 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleDangerousAction(action, redirectTo) {
+    try {
+      await action();
+      notifications.modalSuccess("Your request was completed.", "Settings updated");
+      if (redirectTo) {
+        navigate(redirectTo, { replace: true });
+      }
+    } catch (error) {
+      notifications.modalError(error.message, "Action failed");
+    }
+  }
+
   if (loading || !user) {
     return (
       <div className="layout">
@@ -186,10 +263,10 @@ export default function ProfilePage() {
               <h1>{roleHeading(user.role)} details.</h1>
               <p className="hero-copy">
                 {user.role === "seller"
-                  ? "Store accounts can manage business identity, coverage area, and seller-facing contact details."
+                  ? "Store accounts manage business identity, coverage area, listings, and incoming orders here."
                   : user.role === "delivery"
-                    ? "Rider accounts can manage delivery contact details, service area, vehicle info, and operational notes."
-                    : "Customers can manage contact details, default address, and delivery notes."}
+                    ? "Delivery accounts manage rider details, service area, vehicle information, and delivery access here."
+                    : "Customers manage contact details, saved defaults, and order visibility here."}
               </p>
             </div>
           </div>
@@ -201,8 +278,8 @@ export default function ProfilePage() {
                 <strong>{user.role}</strong>
               </article>
               <article className="metric-card">
-                <span className="eyebrow">Email</span>
-                <strong className="metric-compact">{user.email}</strong>
+                <span className="eyebrow">Username</span>
+                <strong className="metric-compact">{user.username}</strong>
               </article>
             </div>
           </div>
@@ -225,23 +302,27 @@ export default function ProfilePage() {
           {ordersStatus ? <p className="muted">{ordersStatus}</p> : null}
           {orders.length ? (
             <div className="stack">
-              {orders.map((order) => (
-                <article className="page-card inset-card" key={order.id}>
-                  <div className="section-heading compact">
-                    <div>
-                      <h3>{order.id}</h3>
-                      <p className="muted">{order.deliveryAddress}</p>
+              {orders.map((order) => {
+                const stateMeta = getOrderStateMeta(order, user.role);
+
+                return (
+                  <article className="page-card inset-card" key={order.id}>
+                    <div className="section-heading compact">
+                      <div>
+                        <h3>{order.id}</h3>
+                        <p className="muted">{order.deliveryAddress}</p>
+                      </div>
+                      <div className="stack">
+                        <span className={`status-chip ${stateMeta.className}`}>{stateMeta.label}</span>
+                        <Link className="ghost-link" to={`/orders/${order.id}`}>
+                          View progress
+                        </Link>
+                      </div>
                     </div>
-                    <div className="stack">
-                      <span className={`status-chip ${order.status}`}>{order.status}</span>
-                      <Link className="ghost-link" to={`/orders/${order.id}`}>
-                        View progress
-                      </Link>
-                    </div>
-                  </div>
-                  <OrderProgress compact order={order} role={user.role} />
-                </article>
-              ))}
+                    <p className="muted">{formatOrderStateLine(order, user.role)}</p>
+                  </article>
+                );
+              })}
             </div>
           ) : (
             <p className="muted">No related orders yet.</p>
@@ -254,6 +335,9 @@ export default function ProfilePage() {
               <span className="eyebrow">Settings</span>
               <h2>Update your profile</h2>
             </div>
+            <button className="ghost-button" onClick={logout} type="button">
+              Logout
+            </button>
           </div>
           <form className="stack form-grid profile-form" onSubmit={handleSubmit}>
             <label>
@@ -261,6 +345,13 @@ export default function ProfilePage() {
               <input
                 onChange={(event) => updateField("avatarUrl", event.target.value)}
                 value={form.avatarUrl}
+              />
+            </label>
+            <label>
+              Username
+              <input
+                onChange={(event) => updateField("username", event.target.value)}
+                value={form.username}
               />
             </label>
             <label>
@@ -329,7 +420,7 @@ export default function ProfilePage() {
             {user.role === "delivery" ? (
               <>
                 <label>
-                  Vehicle type
+                  Vehicle details
                   <input
                     onChange={(event) => updateField("vehicleType", event.target.value)}
                     value={form.vehicleType}
@@ -368,6 +459,69 @@ export default function ProfilePage() {
               </button>
             </div>
           </form>
+        </section>
+
+        <section className="page-card">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">More settings</span>
+              <h2>Advanced options</h2>
+            </div>
+            <button
+              className="ghost-button"
+              onClick={() => setShowMoreSettings((current) => !current)}
+              type="button"
+            >
+              {showMoreSettings ? "Hide" : "More Settings"}
+            </button>
+          </div>
+          {showMoreSettings ? (
+            <div className="stack advanced-settings">
+              {user.role !== "seller" ? (
+                <Link className="ghost-link" to="/login/store-owner">
+                  Log in as Store Owner
+                </Link>
+              ) : null}
+              {user.role !== "delivery" ? (
+                <Link className="ghost-link" to="/login/delivery">
+                  Log in as Delivery Partner
+                </Link>
+              ) : null}
+              {user.role === "seller" ? (
+                <>
+                  <button
+                    className="ghost-button danger-button"
+                    onClick={() => handleDangerousAction(deleteListings)}
+                    type="button"
+                  >
+                    Delete all listings
+                  </button>
+                  <button
+                    className="ghost-button danger-button"
+                    onClick={() => handleDangerousAction(deleteStore, "/login/store-owner")}
+                    type="button"
+                  >
+                    Delete my store
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="ghost-button danger-button"
+                  onClick={() =>
+                    handleDangerousAction(
+                      deleteAccount,
+                      user.role === "delivery" ? "/login/delivery" : "/login"
+                    )
+                  }
+                  type="button"
+                >
+                  Delete my account
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="muted">Open More Settings to access role-specific account actions.</p>
+          )}
         </section>
       </PageTransition>
     </div>

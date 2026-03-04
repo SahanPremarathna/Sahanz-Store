@@ -10,6 +10,7 @@ async function getOrdersForUser(user) {
 }
 
 module.exports = {
+  cancelOrder: (...args) => getDataSource().cancelOrder(...args),
   createOrder: (...args) => getDataSource().createOrder(...args),
   getOrdersForUser,
   updateSellerOrderProgress: (...args) => getDataSource().updateSellerOrderProgress(...args)

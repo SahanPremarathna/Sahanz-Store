@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Navigation from "../../components/Navigation";
 import { useAuth } from "../../auth/AuthContext";
-import OrderProgress from "../../components/OrderProgress";
 import PageTransition from "../../components/PageTransition";
-import { getDeliveries, updateDeliveryStatus } from "../../api/client";
+import { getDeliveries } from "../../api/client";
 import { useNotifications } from "../../notifications/NotificationContext";
 
 function formatCoordinates(coordinates) {
@@ -15,21 +14,34 @@ function formatCoordinates(coordinates) {
   return `${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}`;
 }
 
-function buildMapEmbedLink(coordinates) {
-  if (!coordinates) {
-    return null;
+function getDeliveryStateText(delivery) {
+  if (!delivery.order) {
+    return "Order details are not available for this task.";
   }
 
-  return `https://www.google.com/maps?q=${coordinates.latitude},${coordinates.longitude}&z=17&output=embed`;
+  if (
+    delivery.order.status === "cancelled" ||
+    delivery.order.deliveryStatus === "cancelled"
+  ) {
+    const reason = delivery.order.cancellationReason
+      ? `Reason: ${delivery.order.cancellationReason}`
+      : "Order cancelled";
+    return `${reason}${delivery.order.cancellationNote ? ` | ${delivery.order.cancellationNote}` : ""}`;
+  }
+
+  if (delivery.order.deliveryStatus === "awaiting_assignment") {
+    return "Waiting for the seller to hand the order over.";
+  }
+
+  return `Delivery: ${delivery.status.replace(/_/g, " ")} | Order: ${delivery.order.deliveryStatus.replace(/_/g, " ")}`;
 }
 
 export default function DeliveryDashboard() {
-  const { user } = useAuth();
+  const { token, user } = useAuth();
   const notifications = useNotifications();
   const [deliveries, setDeliveries] = useState([]);
   const [statusMessage, setStatusMessage] = useState("Loading delivery queue...");
   const [currentLocation, setCurrentLocation] = useState(null);
-  const [busyDeliveryId, setBusyDeliveryId] = useState("");
 
   useEffect(() => {
     if (!user) {
@@ -38,7 +50,7 @@ export default function DeliveryDashboard() {
 
     let isMounted = true;
 
-    getDeliveries(user)
+    getDeliveries(token)
       .then((data) => {
         if (isMounted) {
           setDeliveries(data);
@@ -55,43 +67,7 @@ export default function DeliveryDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [notifications, user]);
-
-  async function handleStatusChange(deliveryId, nextStatus) {
-    setBusyDeliveryId(deliveryId);
-
-    try {
-      const updated = await updateDeliveryStatus(deliveryId, nextStatus, user);
-      setDeliveries((current) =>
-        current.map((delivery) =>
-          delivery.id === deliveryId ? updated : delivery
-        )
-      );
-      setStatusMessage(`Delivery ${deliveryId} marked ${nextStatus}.`);
-      if (nextStatus === "delivered") {
-        notifications.modalSuccess(
-          `Delivery ${deliveryId} was completed successfully.`,
-          "Delivery completed",
-          [
-            {
-              label: "Close",
-              variant: "primary"
-            }
-          ]
-        );
-      } else {
-        notifications.success(
-          `Delivery ${deliveryId} was marked ${nextStatus.replace(/_/g, " ")}.`,
-          "Delivery updated"
-        );
-      }
-    } catch (error) {
-      setStatusMessage(`Failed to update delivery: ${error.message}`);
-      notifications.modalError(error.message, "Delivery update failed");
-    } finally {
-      setBusyDeliveryId("");
-    }
-  }
+  }, [notifications, token, user]);
 
   function captureCurrentLocation() {
     if (!navigator.geolocation) {
@@ -156,11 +132,9 @@ export default function DeliveryDashboard() {
         <section className="seller-hero portal-hero">
           <div>
             <span className="eyebrow">Delivery portal</span>
-            <h1>Riders get the exact coordinates and a live route to the drop-off.</h1>
+            <h1>Assigned drops in one compact delivery queue.</h1>
             <p className="hero-copy">
-              This portal exposes the precise destination coordinates, order
-              contents, and direct Google Maps navigation from the rider's
-              current position to the delivery point.
+              Keep the queue light here, then open each order to update the live delivery state.
             </p>
           </div>
           <div className="portal-summary">
@@ -195,49 +169,29 @@ export default function DeliveryDashboard() {
               ))
             ) : null}
             {deliveries.map((delivery) => {
-              const exactCoordinates =
-                delivery.order?.deliveryLocation?.exactCoordinates;
-              const mapEmbedLink = buildMapEmbedLink(exactCoordinates);
-              const isWaitingForSeller =
-                delivery.order?.deliveryStatus === "awaiting_assignment";
-              const isPickedUp = delivery.status === "picked_up";
-              const isInTransit = delivery.status === "in_transit";
-              const isDelivered = delivery.status === "delivered";
+              const exactCoordinates = delivery.order?.deliveryLocation?.exactCoordinates;
 
               return (
-                <article className="delivery-card portal-card" key={delivery.id}>
+                <article className="order-card portal-card seller-stream-card" key={delivery.id}>
                   <div className="section-heading compact">
                     <div>
                       <span className="eyebrow">Task {delivery.id}</span>
-                      <h2>{delivery.order?.customerName || "Unknown order"}</h2>
+                      <h3>{delivery.order?.customerName || "Unknown order"}</h3>
                     </div>
                     <span className={`status-chip ${delivery.status}`}>
                       {delivery.status}
                     </span>
                   </div>
-                  <p>{delivery.order?.deliveryAddress}</p>
                   <p className="muted">
-                    Exact coordinates: {formatCoordinates(exactCoordinates)}
+                    Recipient: {delivery.order?.recipientName || delivery.order?.customerName || "Unknown"}
                   </p>
-                  {mapEmbedLink ? (
-                    <iframe
-                      className="map-frame"
-                      loading="lazy"
-                      src={mapEmbedLink}
-                      title={`Exact map for ${delivery.id}`}
-                    />
-                  ) : null}
-                  <div className="inline-actions">
-                    {delivery.order?.deliveryLocation?.deliveryMapLink ? (
-                      <a
-                        className="ghost-link"
-                        href={delivery.order.deliveryLocation.deliveryMapLink}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        Open exact Google Maps view
-                      </a>
-                    ) : null}
+                  <p className="muted">{delivery.order?.deliveryAddress || "No address attached"}</p>
+                  <p className="muted">{getDeliveryStateText(delivery)}</p>
+                  <div className="seller-stream-meta">
+                    <span>Coordinates: {formatCoordinates(exactCoordinates)}</span>
+                    <span>{delivery.order?.items?.length || 0} items</span>
+                  </div>
+                  <div className="inline-actions compact-order-links">
                     <button
                       className="ghost-button"
                       onClick={() => openNavigation(exactCoordinates)}
@@ -245,65 +199,21 @@ export default function DeliveryDashboard() {
                     >
                       Navigate from current location
                     </button>
+                    {delivery.order?.deliveryLocation?.deliveryMapLink ? (
+                      <a
+                        className="ghost-link"
+                        href={delivery.order.deliveryLocation.deliveryMapLink}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Open exact map
+                      </a>
+                    ) : null}
                     {delivery.order ? (
                       <Link className="ghost-link" to={`/orders/${delivery.order.id}`}>
-                        Open delivery progress
+                        Open fulfillment view
                       </Link>
                     ) : null}
-                  </div>
-                  {delivery.order ? (
-                    <OrderProgress compact order={delivery.order} role="delivery" />
-                  ) : null}
-                  {isWaitingForSeller ? (
-                    <p className="muted">
-                      Waiting for the seller to confirm and hand off this order.
-                    </p>
-                  ) : null}
-                  <ul className="order-items">
-                    {(delivery.order?.items || []).map((item) => (
-                      <li key={`${delivery.id}-${item.productId}`}>
-                        {item.title} x{item.quantity}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="delivery-actions">
-                    <button
-                      className="ghost-button"
-                      disabled={
-                        busyDeliveryId === delivery.id ||
-                        isWaitingForSeller ||
-                        isPickedUp ||
-                        isInTransit ||
-                        isDelivered
-                      }
-                      onClick={() => handleStatusChange(delivery.id, "picked_up")}
-                      type="button"
-                    >
-                      {busyDeliveryId === delivery.id ? "Updating..." : "Picked up"}
-                    </button>
-                    <button
-                      className="ghost-button"
-                      disabled={
-                        busyDeliveryId === delivery.id ||
-                        !isPickedUp ||
-                        isInTransit ||
-                        isDelivered
-                      }
-                      onClick={() => handleStatusChange(delivery.id, "in_transit")}
-                      type="button"
-                    >
-                      In transit
-                    </button>
-                    <button
-                      className="primary-button"
-                      disabled={
-                        busyDeliveryId === delivery.id || !isInTransit || isDelivered
-                      }
-                      onClick={() => handleStatusChange(delivery.id, "delivered")}
-                      type="button"
-                    >
-                      Delivered
-                    </button>
                   </div>
                 </article>
               );

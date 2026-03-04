@@ -31,10 +31,17 @@ function groupCatalog(categories, products) {
       name: product.title,
       slug: product.slug,
       description: product.description,
+      longDescription: product.long_description || product.longDescription || "",
+      details: product.details || [],
+      ingredients: product.ingredients || [],
+      usageNotes: product.usage_notes || product.usageNotes || "",
+      storageNotes: product.storage_notes || product.storageNotes || "",
+      galleryImages: product.gallery_images || product.galleryImages || [],
       priceCents: product.price_cents,
       currency: product.currency,
       imageUrl: product.image_url,
-      inventoryCount: product.inventory_count
+      inventoryCount: product.inventory_count,
+      createdAt: product.created_at
     });
   }
 
@@ -52,10 +59,17 @@ function toCatalogProduct(product) {
     title: product.title,
     slug: product.slug,
     description: product.description,
+    long_description: product.longDescription || "",
+    details: product.details || [],
+    ingredients: product.ingredients || [],
+    usage_notes: product.usageNotes || "",
+    storage_notes: product.storageNotes || "",
+    gallery_images: product.galleryImages || [],
     price_cents: product.priceCents,
     currency: product.currency,
     image_url: product.imageUrl,
-    inventory_count: product.inventoryCount
+    inventory_count: product.inventoryCount,
+    created_at: product.createdAt
   };
 }
 
@@ -91,11 +105,18 @@ async function getSellerProducts(sellerId) {
       title: product.title,
       slug: product.slug,
       description: product.description,
+      longDescription: product.longDescription || "",
+      details: product.details || [],
+      ingredients: product.ingredients || [],
+      usageNotes: product.usageNotes || "",
+      storageNotes: product.storageNotes || "",
+      galleryImages: product.galleryImages || [],
       priceCents: product.priceCents,
       currency: product.currency,
       imageUrl: product.imageUrl,
       inventoryCount: product.inventoryCount,
-      isActive: product.isActive
+      isActive: product.isActive,
+      createdAt: product.createdAt
     }))
   );
 }
@@ -138,6 +159,12 @@ async function createSellerProduct(input) {
     title: input.title,
     slug,
     description: input.description,
+    longDescription: input.longDescription || "",
+    details: Array.isArray(input.details) ? input.details : [],
+    ingredients: Array.isArray(input.ingredients) ? input.ingredients : [],
+    usageNotes: input.usageNotes || "",
+    storageNotes: input.storageNotes || "",
+    galleryImages: Array.isArray(input.galleryImages) ? input.galleryImages : [],
     priceCents: Number(input.priceCents),
     currency: input.currency || "LKR",
     imageUrl: input.imageUrl || "",

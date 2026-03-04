@@ -2,15 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Navigation from "../../components/Navigation";
 import { useAuth } from "../../auth/AuthContext";
-import OrderProgress from "../../components/OrderProgress";
 import PageTransition from "../../components/PageTransition";
 import SmartImage from "../../components/SmartImage";
 import {
   createSellerProduct,
   getCategories,
   getOrders,
-  getSellerProducts,
-  updateSellerOrderProgress
+  getSellerProducts
 } from "../../api/client";
 import { useNotifications } from "../../notifications/NotificationContext";
 
@@ -18,30 +16,22 @@ function formatMoney(currency, cents) {
   return `${currency} ${(cents / 100).toFixed(2)}`;
 }
 
-function formatApproximateCoordinates(coordinates) {
-  if (!coordinates) {
-    return "Customer did not share coordinates";
+function getOrderStateText(order) {
+  if (order.status === "cancelled" || order.deliveryStatus === "cancelled") {
+    const reason = order.cancellationReason ? `Reason: ${order.cancellationReason}` : "Order cancelled";
+    return `${reason}${order.cancellationNote ? ` | ${order.cancellationNote}` : ""}`;
   }
 
-  return `${coordinates.latitude.toFixed(2)}, ${coordinates.longitude.toFixed(2)}`;
-}
-
-function buildMapEmbedLink(coordinates) {
-  if (!coordinates) {
-    return null;
-  }
-
-  return `https://www.google.com/maps?q=${coordinates.latitude},${coordinates.longitude}&z=13&output=embed`;
+  return `Delivery: ${order.deliveryStatus} | Total: ${formatMoney(order.currency, order.totalCents)}`;
 }
 
 export default function SellerDashboard() {
-  const { user } = useAuth();
+  const { token, user } = useAuth();
   const notifications = useNotifications();
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [stateMessage, setStateMessage] = useState("Loading seller data...");
-  const [busyOrderId, setBusyOrderId] = useState("");
   const [form, setForm] = useState({
     categoryId: "",
     title: "",
@@ -59,7 +49,7 @@ export default function SellerDashboard() {
     let isMounted = true;
     setStateMessage("Loading seller data...");
 
-    Promise.all([getCategories(), getSellerProducts(user), getOrders(user)])
+    Promise.all([getCategories(), getSellerProducts(token), getOrders(token)])
       .then(([categoryData, productData, orderData]) => {
         if (!isMounted) {
           return;
@@ -84,7 +74,7 @@ export default function SellerDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [notifications, user]);
+  }, [notifications, token, user]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -99,7 +89,7 @@ export default function SellerDashboard() {
           inventoryCount: Number(form.inventoryCount),
           imageUrl: form.imageUrl
         },
-        user
+        token
       );
 
       setProducts((current) => [product, ...current]);
@@ -132,30 +122,9 @@ export default function SellerDashboard() {
     }
   }
 
-  async function handleOrderProgress(orderId, step) {
-    setBusyOrderId(orderId);
-
-    try {
-      const updated = await updateSellerOrderProgress(orderId, step, user);
-      setOrders((current) =>
-        current.map((order) => (order.id === orderId ? updated : order))
-      );
-      setStateMessage(`Order ${orderId} updated.`);
-      notifications.success(
-        step === "confirm"
-          ? `Order ${orderId} was confirmed and moved to preparation.`
-          : `Order ${orderId} is now ready for rider pickup.`,
-        "Seller progress updated"
-      );
-    } catch (error) {
-      setStateMessage(`Failed to update order: ${error.message}`);
-      notifications.modalError(error.message, "Seller progress update failed");
-    } finally {
-      setBusyOrderId("");
-    }
-  }
-
-  const openOrders = orders.filter((order) => order.status !== "delivered").length;
+  const openOrders = orders.filter(
+    (order) => order.status !== "delivered" && order.status !== "cancelled"
+  ).length;
 
   return (
     <div className="layout">
@@ -164,11 +133,10 @@ export default function SellerDashboard() {
         <section className="seller-hero portal-hero">
           <div>
             <span className="eyebrow">Seller portal</span>
-            <h1>See incoming orders without exposing the exact drop-off point.</h1>
+            <h1>Keep the order queue tight and move into fulfillment only when needed.</h1>
             <p className="hero-copy">
-              Sellers manage listings and monitor the full order queue here. The
-              map shown for each order is approximate, so the seller can plan the
-              area without seeing the rider-level destination coordinates.
+              This view is now compact on purpose. Use it to scan incoming orders fast,
+              then open the fulfillment page when you need to update the order itself.
             </p>
           </div>
           <div className="portal-summary">
@@ -197,97 +165,37 @@ export default function SellerDashboard() {
           <div className="portal-grid">
             {!orders.length && stateMessage.startsWith("Loading") ? (
               Array.from({ length: 3 }).map((_, index) => (
-                <article className="order-card portal-card skeleton-card" key={`seller-order-${index}`}>
+                <article
+                  className="order-card portal-card seller-stream-card skeleton-card"
+                  key={`seller-order-${index}`}
+                >
                   <div className="skeleton-block skeleton-line short" />
                   <div className="skeleton-block skeleton-line" />
-                  <div className="skeleton-block skeleton-map" />
+                  <div className="skeleton-block skeleton-line medium" />
                 </article>
               ))
             ) : null}
-            {orders.map((order) => {
-              const approximateCoordinates =
-                order.deliveryLocation?.approximateCoordinates;
-              const mapEmbedLink = buildMapEmbedLink(approximateCoordinates);
-
-              return (
-                <article className="order-card portal-card" key={order.id}>
-                  <div className="section-heading compact">
-                    <div>
-                      <span className="eyebrow">Order {order.id}</span>
-                      <h3>{order.customerName}</h3>
-                    </div>
-                    <span className={`status-chip ${order.status}`}>{order.status}</span>
+            {orders.map((order) => (
+              <article className="order-card portal-card seller-stream-card" key={order.id}>
+                <div className="section-heading compact">
+                  <div>
+                    <span className="eyebrow">Order {order.id}</span>
+                    <h3>{order.customerName}</h3>
                   </div>
-                  <p className="muted">{order.deliveryAddress}</p>
-                  <p className="muted">
-                    Approx. delivery area:{" "}
-                    {formatApproximateCoordinates(approximateCoordinates)}
-                  </p>
-                  {mapEmbedLink ? (
-                    <iframe
-                      className="map-frame"
-                      loading="lazy"
-                      src={mapEmbedLink}
-                      title={`Approximate map for ${order.id}`}
-                    />
-                  ) : null}
-                  {order.deliveryLocation?.sellerMapLink ? (
-                    <a
-                      className="ghost-link"
-                      href={order.deliveryLocation.sellerMapLink}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Open approximate Google Maps view
-                    </a>
-                  ) : null}
-                  <p className="muted">
-                    Delivery: {order.deliveryStatus} | Total:{" "}
-                    {formatMoney(order.currency, order.totalCents)}
-                  </p>
-                  <OrderProgress compact order={order} role="seller" />
-                  <div className="delivery-actions">
-                    <button
-                      className="ghost-button"
-                      disabled={busyOrderId === order.id || order.status !== "pending"}
-                      onClick={() => handleOrderProgress(order.id, "confirm")}
-                      type="button"
-                    >
-                      {busyOrderId === order.id && order.status === "pending"
-                        ? "Updating..."
-                        : "Confirm order"}
-                    </button>
-                    <button
-                      className="primary-button"
-                      disabled={
-                        busyOrderId === order.id ||
-                        order.status === "delivered" ||
-                        order.deliveryStatus === "assigned" ||
-                        order.deliveryStatus === "picked_up" ||
-                        order.deliveryStatus === "in_transit" ||
-                        order.deliveryStatus === "delivered"
-                      }
-                      onClick={() => handleOrderProgress(order.id, "ready_for_pickup")}
-                      type="button"
-                    >
-                      {busyOrderId === order.id && order.deliveryStatus !== "assigned"
-                        ? "Updating..."
-                        : "Ready for pickup"}
-                    </button>
-                  </div>
-                  <ul className="order-items">
-                    {order.items.map((item) => (
-                      <li key={`${order.id}-${item.productId}`}>
-                        {item.title} x{item.quantity}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link className="ghost-link" to={`/orders/${order.id}`}>
-                    Open fulfillment view
-                  </Link>
-                </article>
-              );
-            })}
+                  <span className={`status-chip ${order.status}`}>{order.status}</span>
+                </div>
+                <p className="muted">Recipient: {order.recipientName || order.customerName}</p>
+                <p className="muted">{order.deliveryAddress}</p>
+                <p className="muted">{getOrderStateText(order)}</p>
+                <div className="seller-stream-meta">
+                  <span>{order.items.length} items</span>
+                  <span>{formatMoney(order.currency, order.totalCents)}</span>
+                </div>
+                <Link className="ghost-link" to={`/orders/${order.id}`}>
+                  Open fulfillment view
+                </Link>
+              </article>
+            ))}
           </div>
         </section>
 

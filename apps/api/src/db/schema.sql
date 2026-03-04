@@ -9,7 +9,9 @@ drop table if exists public.profiles cascade;
 
 create table public.profiles (
   id uuid primary key default gen_random_uuid(),
+  username text not null unique,
   email text not null unique,
+  password_hash text not null,
   full_name text not null,
   role text not null check (role in ('customer', 'seller', 'delivery')),
   phone text not null default '',
@@ -39,9 +41,15 @@ create table public.seller_products (
   title text not null,
   slug text not null unique,
   description text not null default '',
+  long_description text not null default '',
+  details jsonb not null default '[]'::jsonb,
+  ingredients jsonb not null default '[]'::jsonb,
+  usage_notes text not null default '',
+  storage_notes text not null default '',
   price_cents integer not null check (price_cents >= 0),
   currency text not null default 'LKR',
   image_url text not null default '',
+  gallery_images jsonb not null default '[]'::jsonb,
   inventory_count integer not null default 0 check (inventory_count >= 0),
   is_active boolean not null default true,
   sort_order integer not null default 0,
@@ -58,15 +66,25 @@ create table public.orders (
     status in ('pending', 'processing', 'out_for_delivery', 'delivered', 'cancelled')
   ),
   delivery_status text not null default 'awaiting_assignment' check (
-    delivery_status in ('awaiting_assignment', 'assigned', 'picked_up', 'in_transit', 'delivered')
+    delivery_status in ('awaiting_assignment', 'assigned', 'picked_up', 'in_transit', 'delivered', 'cancelled')
   ),
   total_cents integer not null check (total_cents >= 0),
   currency text not null default 'LKR',
   recipient_name text not null default '',
   delivery_address text not null,
+  delivery_address_line_1 text not null default '',
+  delivery_address_line_2 text not null default '',
+  delivery_city text not null default '',
+  delivery_postal_code text not null default '',
   delivery_latitude double precision,
   delivery_longitude double precision,
   notes text not null default '',
+  cancelled_by_role text not null default '' check (
+    cancelled_by_role in ('', 'customer', 'seller')
+  ),
+  cancellation_reason text not null default '',
+  cancellation_note text not null default '',
+  cancelled_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (
@@ -162,7 +180,9 @@ with check (auth.role() = 'service_role');
 
 insert into public.profiles (
   id,
+  username,
   email,
+  password_hash,
   full_name,
   role,
   phone,
@@ -178,7 +198,9 @@ insert into public.profiles (
 values
   (
     '00000000-0000-0000-0000-000000000101',
+    'nethmi',
     'customer@sahanz.store',
+    'scrypt:f4fb65eb05e766929682c3d0c649c5b6:254f394899fc84b5265058eb13304bee59f3701deda9fe4f9c7f1fae6ef634f7cbad910418a0f51df98f2848437e39256e941768d61d7bca3322067a3154f8fc',
     'Nethmi Perera',
     'customer',
     '0770000001',
@@ -195,6 +217,10 @@ values
         "label": "Home",
         "recipient_name": "Nethmi Perera",
         "address": "12 Lake Road, Colombo 08",
+        "address_line_1": "12 Lake Road",
+        "address_line_2": "",
+        "city": "Colombo 08",
+        "postal_code": "00800",
         "latitude": 6.914700,
         "longitude": 79.877000,
         "is_default": true
@@ -204,6 +230,10 @@ values
         "label": "Office",
         "recipient_name": "Nethmi Perera",
         "address": "75 Union Place, Colombo 02",
+        "address_line_1": "75 Union Place",
+        "address_line_2": "",
+        "city": "Colombo 02",
+        "postal_code": "00200",
         "latitude": 6.917200,
         "longitude": 79.861100,
         "is_default": false
@@ -212,7 +242,9 @@ values
   ),
   (
     '00000000-0000-0000-0000-000000000201',
+    'sahanzmart',
     'seller@sahanz.store',
+    'scrypt:02435f7038116ab22d4c2a8d4c4d0508:ca87a83c630a828408ecd45f512cf7f6ae6e0febfb9575126fe121632c5426e0bbf638dd18f15b9d2de370b1080f580e558ba0b66d7818e086b9446a51a6785e',
     'Sahanz Mart',
     'seller',
     '0770000002',
@@ -227,7 +259,9 @@ values
   ),
   (
     '00000000-0000-0000-0000-000000000301',
+    'rashmika',
     'delivery@sahanz.store',
+    'scrypt:9c6c99fa39e6ce71d7f08130c848fc07:71d5b206d43363c1b0c99f403e5b7981f6f69c7711baa9295a3e76f925c6025f3b598223c137a263bb5804dde48417f8335ffb0457d4c9661aca3521b2a14d89',
     'Rashmika Rider',
     'delivery',
     '0770000003',
@@ -301,6 +335,58 @@ values
     3
   );
 
+update public.seller_products
+set
+  long_description = case title
+    when 'Nadu Rice 5kg' then 'Nadu Rice 5kg is packed as a dependable everyday kitchen staple for regular home cooking. The grain is suited for family meals, pantry restocks, and bulk weekly shopping, making it an easy choice for households that want a familiar rice option that works across lunch and dinner dishes. It is positioned as a practical repeat-buy item that balances quantity, convenience, and value.'
+    when 'Ceylon Tea 400g' then 'Ceylon Tea 400g is stocked as a strong daily tea option for homes that want a fuller cup through the morning and evening. The blend is intended for routine brewing, guest service, and pantry top-ups, giving shoppers a reliable tea product that fits both everyday use and larger household needs. It is priced and packed to feel like a regular staple rather than a one-off purchase.'
+    when 'Dish Wash Liquid 1L' then 'Dish Wash Liquid 1L is designed as a core household cleaning essential for kitchens that need consistent grease-cutting performance through the week. The size makes it practical for repeat washing, family kitchen use, and general sink-side cleanup, while the product itself is positioned as a straightforward home care item that shoppers can repurchase without second-guessing the category.'
+    else description
+  end,
+  details = case title
+    when 'Nadu Rice 5kg' then '["Family-size pantry pack", "Suitable for daily rice meals", "Balanced for regular household cooking"]'::jsonb
+    when 'Ceylon Tea 400g' then '["Strong household tea blend", "Packed for daily brewing", "Good for multiple servings across the week"]'::jsonb
+    when 'Dish Wash Liquid 1L' then '["Kitchen cleaning essential", "Sized for repeat daily use", "Designed for regular sink-side cleanup"]'::jsonb
+    else '[]'::jsonb
+  end,
+  ingredients = case title
+    when 'Nadu Rice 5kg' then '["Nadu rice"]'::jsonb
+    when 'Ceylon Tea 400g' then '["Ceylon black tea"]'::jsonb
+    when 'Dish Wash Liquid 1L' then '["Cleaning surfactants", "Fragrance blend", "Water-based solution"]'::jsonb
+    else '[]'::jsonb
+  end,
+  gallery_images = case title
+    when 'Nadu Rice 5kg' then '[
+      "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=900&q=80",
+      "https://images.unsplash.com/photo-1516684732162-798a0062be99?auto=format&fit=crop&w=900&q=80",
+      "https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?auto=format&fit=crop&w=900&q=80"
+    ]'::jsonb
+    when 'Ceylon Tea 400g' then '[
+      "https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=900&q=80",
+      "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=80",
+      "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=900&q=80"
+    ]'::jsonb
+    when 'Dish Wash Liquid 1L' then '[
+      "https://images.unsplash.com/photo-1583947582886-f40ec95dd752?auto=format&fit=crop&w=900&q=80",
+      "https://images.unsplash.com/photo-1563453392212-326f5e854473?auto=format&fit=crop&w=900&q=80",
+      "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=900&q=80"
+    ]'::jsonb
+    else '[]'::jsonb
+  end,
+  usage_notes = case title
+    when 'Nadu Rice 5kg' then 'Rinse before cooking and use for everyday rice dishes, meal prep, or family-size servings.'
+    when 'Ceylon Tea 400g' then 'Brew a measured portion in hot water and adjust strength to suit black tea or milk tea preparation.'
+    when 'Dish Wash Liquid 1L' then 'Use a small amount with water or directly on a sponge for plates, cookware, and everyday kitchen washing.'
+    else ''
+  end,
+  storage_notes = case title
+    when 'Nadu Rice 5kg' then 'Store sealed in a cool, dry place away from moisture after opening.'
+    when 'Ceylon Tea 400g' then 'Keep tightly sealed away from humidity and strong odors to preserve freshness.'
+    when 'Dish Wash Liquid 1L' then 'Store upright in a cool indoor area and keep away from direct sunlight.'
+    else ''
+  end
+where seller_id = '00000000-0000-0000-0000-000000000201';
+
 insert into public.orders (
   id,
   customer_id,
@@ -312,6 +398,10 @@ insert into public.orders (
   currency,
   recipient_name,
   delivery_address,
+  delivery_address_line_1,
+  delivery_address_line_2,
+  delivery_city,
+  delivery_postal_code,
   delivery_latitude,
   delivery_longitude,
   notes,
@@ -330,6 +420,10 @@ values
     'LKR',
     'Nethmi Perera',
     '12 Lake Road, Colombo 08',
+    '12 Lake Road',
+    '',
+    'Colombo 08',
+    '00800',
     6.914700,
     79.877000,
     'Call on arrival.',

@@ -18,6 +18,10 @@ function buildSavedAddress(address, fallbackName) {
     label: address.label || `Saved ${new Date().toLocaleDateString()}`,
     recipientName: address.recipientName || fallbackName,
     address: address.deliveryAddress,
+    addressLine1: address.deliveryAddressLine1,
+    addressLine2: address.deliveryAddressLine2,
+    city: address.deliveryCity,
+    postalCode: address.deliveryPostalCode,
     latitude: Number(address.latitude),
     longitude: Number(address.longitude),
     isDefault: false
@@ -155,7 +159,7 @@ export default function CheckoutPage() {
                 <div className="saved-addresses">
                   <span className="eyebrow">Saved addresses</span>
                   <div className="saved-address-list">
-                    {savedAddresses.map((address) => (
+                {savedAddresses.map((address) => (
                       <button
                         className={`saved-address-card ${
                           checkout.selectedSavedAddressId === address.id ? "active" : ""
@@ -175,17 +179,53 @@ export default function CheckoutPage() {
                 </div>
               ) : null}
 
-              <label>
-                Delivery address
-                <textarea
-                  onChange={(event) => {
-                    updateCheckoutField("deliveryAddress", event.target.value);
-                    updateCheckoutField("selectedSavedAddressId", "");
-                  }}
-                  rows="3"
-                  value={checkout.deliveryAddress}
-                />
-              </label>
+              <div className="form-grid checkout-address-grid">
+                <label>
+                  Address line 1
+                  <input
+                    onChange={(event) => {
+                      updateCheckoutField("deliveryAddressLine1", event.target.value);
+                      updateCheckoutField("selectedSavedAddressId", "");
+                    }}
+                    value={checkout.deliveryAddressLine1}
+                  />
+                </label>
+                <label>
+                  Address line 2
+                  <input
+                    onChange={(event) => {
+                      updateCheckoutField("deliveryAddressLine2", event.target.value);
+                      updateCheckoutField("selectedSavedAddressId", "");
+                    }}
+                    value={checkout.deliveryAddressLine2}
+                  />
+                </label>
+                <label>
+                  City
+                  <input
+                    onChange={(event) => {
+                      updateCheckoutField("deliveryCity", event.target.value);
+                      updateCheckoutField("selectedSavedAddressId", "");
+                    }}
+                    value={checkout.deliveryCity}
+                  />
+                </label>
+                <label>
+                  Postal code
+                  <input
+                    onChange={(event) => {
+                      updateCheckoutField("deliveryPostalCode", event.target.value);
+                      updateCheckoutField("selectedSavedAddressId", "");
+                    }}
+                    value={checkout.deliveryPostalCode}
+                  />
+                </label>
+              </div>
+
+              <div className="checkout-fixed-row compact">
+                <span className="eyebrow">Formatted address</span>
+                <strong>{checkout.deliveryAddress || "Add the address fields above"}</strong>
+              </div>
 
               <div className="coordinate-grid">
                 <label>

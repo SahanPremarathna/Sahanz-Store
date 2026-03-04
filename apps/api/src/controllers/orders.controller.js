@@ -13,6 +13,10 @@ async function createOrder(req, res) {
       items: req.body.items || [],
       recipientName: req.body.recipientName || req.user.name,
       deliveryAddress: req.body.deliveryAddress,
+      deliveryAddressLine1: req.body.deliveryAddressLine1 || "",
+      deliveryAddressLine2: req.body.deliveryAddressLine2 || "",
+      deliveryCity: req.body.deliveryCity || "",
+      deliveryPostalCode: req.body.deliveryPostalCode || "",
       deliveryCoordinates: req.body.deliveryCoordinates || null,
       notes: req.body.notes || ""
     });
@@ -41,7 +45,25 @@ async function updateSellerProgress(req, res) {
   }
 }
 
+async function cancelOrder(req, res) {
+  try {
+    const order = await orderService.cancelOrder(
+      req.params.orderId,
+      req.user,
+      req.body.reason,
+      req.body.note || ""
+    );
+    res.json(formatApiResponse(order, "Order cancelled"));
+  } catch (error) {
+    res.status(400).json({
+      message: "Failed to cancel order",
+      error: error.message
+    });
+  }
+}
+
 module.exports = {
+  cancelOrder,
   createOrder,
   listOrders,
   updateSellerProgress

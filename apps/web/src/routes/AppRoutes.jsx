@@ -10,9 +10,11 @@ import ProductDetailsPage from "../pages/shop/ProductDetailsPage";
 import ProfilePage from "../pages/profile/ProfilePage";
 import OrderDetailsPage from "../pages/orders/OrderDetailsPage";
 import CheckoutPage from "../pages/shop/CheckoutPage";
+import CategoriesPage from "../pages/shop/CategoriesPage";
 import ShopPage from "../pages/shop/ShopPage";
 import SellerDashboard from "../pages/seller/SellerDashboard";
 import DeliveryDashboard from "../pages/delivery/DeliveryDashboard";
+import AuthPage from "../pages/auth/AuthPage";
 
 export default function AppRoutes() {
   return (
@@ -21,7 +23,22 @@ export default function AppRoutes() {
         <ShopProvider>
           <Routes>
             <Route path="/" element={<ShopPage />} />
+            <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/categories/:categorySlug" element={<ShopPage />} />
             <Route path="/products/:slug" element={<ProductDetailsPage />} />
+            <Route path="/login" element={<AuthPage role="customer" />} />
+            <Route
+              path="/signup"
+              element={<AuthPage defaultMode="signup" role="customer" />}
+            />
+            <Route
+              path="/login/store-owner"
+              element={<AuthPage role="seller" />}
+            />
+            <Route
+              path="/login/delivery"
+              element={<AuthPage role="delivery" />}
+            />
             <Route
               path="/checkout"
               element={
