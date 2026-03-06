@@ -3,6 +3,41 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useNotifications } from "../../notifications/NotificationContext";
 
+const RIGHT_BRAND_ROWS = Array.from({ length: 18 }, (_, index) => index);
+const RIGHT_BRAND_WORDS = Array.from({ length: 36 }, () => "SahanZ");
+const RIGHT_BRAND_COLORS = [
+  "#1f4c8f",
+  "#2962a3",
+  "#2b7a78",
+  "#37836f",
+  "#8f4a2f",
+  "#a35f30",
+  "#7a3e9d",
+  "#9a4f7f",
+  "#2f5f6b",
+  "#5f4a2f",
+  "#0f766e",
+  "#15803d",
+  "#166534",
+  "#1d4ed8",
+  "#3730a3",
+  "#7c3aed",
+  "#a21caf",
+  "#be185d",
+  "#be123c",
+  "#b45309",
+  "#92400e",
+  "#c2410c",
+  "#0e7490",
+  "#334155",
+  "#475569",
+  "#6d28d9",
+  "#0369a1",
+  "#4338ca",
+  "#047857",
+  "#9f1239"
+];
+
 function getPortalPath(role) {
   if (role === "seller") {
     return "/seller";
@@ -28,23 +63,9 @@ function roleLabel(role) {
 }
 
 function getPortalAccessLinks(role) {
-  if (role === "seller") {
-    return [
-      { to: "/login", label: "Customer access" },
-      { to: "/login/delivery", label: "Delivery partner access" }
-    ];
-  }
-
-  if (role === "delivery") {
-    return [
-      { to: "/login", label: "Customer access" },
-      { to: "/login/store-owner", label: "Store owner access" }
-    ];
-  }
-
   return [
-    { to: "/login/store-owner", label: "Store owner access" },
-    { to: "/login/delivery", label: "Delivery partner access" }
+    { to: "/login/store-owner", label: "Store Login", active: role === "seller" },
+    { to: "/login/delivery", label: "Deliverer Login", active: role === "delivery" }
   ];
 }
 
@@ -63,30 +84,6 @@ function createInitialState(role, mode) {
     vehicleType: "",
     mode,
     role
-  };
-}
-
-function getAuthScene(role, mode) {
-  if (role === "seller") {
-    return {
-      title: "",
-      copy: "",
-      highlights: []
-    };
-  }
-
-  if (role === "delivery") {
-    return {
-      title: "",
-      copy: "",
-      highlights: []
-    };
-  }
-
-  return {
-    title: "",
-    copy: "",
-    highlights: []
   };
 }
 
@@ -174,27 +171,30 @@ function getFieldGroups(role, mode) {
   ];
 }
 
-function AuthBackdrop({ role }) {
-  const source =
-    role === "seller" ? "/shop_svg.svg" : role === "delivery" ? "/delivery_svg.svg" : "/login_svg.svg";
-
-  return <img alt="" aria-hidden="true" className="auth-art" src={source} />;
-}
-
 export default function AuthPage({ defaultMode = "login", role = "customer" }) {
   const navigate = useNavigate();
   const { login, register, user } = useAuth();
   const notifications = useNotifications();
   const [form, setForm] = useState(createInitialState(role, defaultMode));
+  const [visiblePasswords, setVisiblePasswords] = useState({});
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setForm(createInitialState(role, defaultMode));
+    setVisiblePasswords({});
   }, [defaultMode, role]);
 
-  const scene = useMemo(() => getAuthScene(role, form.mode), [role, form.mode]);
   const fieldGroups = useMemo(() => getFieldGroups(role, form.mode), [role, form.mode]);
   const portalAccessLinks = useMemo(() => getPortalAccessLinks(role), [role]);
+  const rightBrandWordColors = useMemo(
+    () =>
+      RIGHT_BRAND_ROWS.map(() =>
+        RIGHT_BRAND_WORDS.map(
+          () => RIGHT_BRAND_COLORS[Math.floor(Math.random() * RIGHT_BRAND_COLORS.length)]
+        )
+      ),
+    []
+  );
   if (user?.role === role) {
     return <Navigate to={getPortalPath(role)} replace />;
   }
@@ -203,6 +203,15 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
     setForm((current) => ({
       ...current,
       [key]: value
+    }));
+  }
+
+  function setPasswordPeek(event, fieldKey, visible) {
+    event.preventDefault();
+    event.stopPropagation();
+    setVisiblePasswords((current) => ({
+      ...current,
+      [fieldKey]: visible
     }));
   }
 
@@ -248,44 +257,47 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
 
   return (
     <div className={`layout auth-layout auth-${role} auth-${form.mode}`}>
-      <div className="auth-page-topbar">
-        <div className="auth-brand-lockup">
-          <Link aria-label="Sahanz Store" className="brand" to="/">
-            <img alt="" aria-hidden="true" className="brand-logo" src="/my_logo.png" />
+      <div className="auth-bg-branding">
+        <div className="auth-bg-branding-left">
+          <Link aria-label="Go to home page" className="auth-bg-brand-link" to="/">
+            <strong>SahanZ</strong>
+            <span>Smart Marketplace</span>
           </Link>
         </div>
-      </div>
-      <section className={`auth-shell ${form.mode === "login" ? "auth-shell-login" : ""}`}>
-        {scene.title || scene.copy || scene.highlights.length ? (
-          <div className="auth-panel auth-art-panel">
-            <div className="auth-copy">
-              <h1>{scene.title}</h1>
-              <p className="hero-copy">{scene.copy}</p>
-            </div>
-
-            {scene.highlights.length ? (
-              <div className="auth-highlight-grid">
-                {scene.highlights.map((item) => (
-                  <article className="auth-highlight-card" key={item}>
-                    <span className="auth-highlight-dot" />
-                    <strong>{item}</strong>
-                  </article>
-                ))}
+        <div aria-hidden="true" className="auth-bg-branding-right">
+          {RIGHT_BRAND_ROWS.map((row) => (
+            <div
+              className={`auth-bg-branding-right-row ${row % 2 === 0 ? "scroll-up" : "scroll-down"}`}
+              key={row}
+            >
+              <div className="auth-bg-branding-right-track">
+                <div className="auth-bg-branding-right-strip">
+                  {RIGHT_BRAND_WORDS.map((word, index) => (
+                    <span key={`${row}-a-${index}`} style={{ color: rightBrandWordColors[row][index] }}>
+                      {word}
+                    </span>
+                  ))}
+                </div>
+                <div aria-hidden="true" className="auth-bg-branding-right-strip">
+                  {RIGHT_BRAND_WORDS.map((word, index) => (
+                    <span key={`${row}-b-${index}`} style={{ color: rightBrandWordColors[row][index] }}>
+                      {word}
+                    </span>
+                  ))}
+                </div>
               </div>
-            ) : null}
-
-            <AuthBackdrop role={role} />
-          </div>
-        ) : (
-          <div className="auth-panel auth-art-panel auth-art-panel-minimal">
-            <AuthBackdrop role={role} />
-          </div>
-        )}
-
-        <div className="auth-panel auth-form-panel">
+            </div>
+          ))}
+        </div>
+      </div>
+      <section className="auth-shell">
+        <div className="auth-panel auth-form-panel auth-glow-shell">
           <div className="auth-form-card">
             <div className="auth-form-head">
               <div>
+                <Link aria-label="Go to home page" className="auth-form-logo-link" to="/">
+                  <img alt="Sahanz Store" className="auth-form-logo" src="/my_logo.png" />
+                </Link>
                 <span className="eyebrow">{roleLabel(role)}</span>
                 <h2>{form.mode === "login" ? "Access account" : "Create account"}</h2>
               </div>
@@ -327,6 +339,74 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
                             rows={field.rows || 3}
                             value={form[field.key]}
                           />
+                        ) : field.type === "password" ? (
+                          <div className="auth-password-wrap">
+                            <input
+                              autoComplete={field.autoComplete}
+                              onChange={(event) => updateField(field.key, event.target.value)}
+                              type={visiblePasswords[field.key] ? "text" : "password"}
+                              value={form[field.key]}
+                            />
+                            <button
+                              aria-label={visiblePasswords[field.key] ? "Hide password" : "Show password"}
+                              className="auth-password-toggle"
+                              onBlur={(event) => setPasswordPeek(event, field.key, false)}
+                              onFocus={(event) => setPasswordPeek(event, field.key, true)}
+                              onPointerCancel={(event) => setPasswordPeek(event, field.key, false)}
+                              onPointerDown={(event) => setPasswordPeek(event, field.key, true)}
+                              onPointerLeave={(event) => setPasswordPeek(event, field.key, false)}
+                              onPointerUp={(event) => setPasswordPeek(event, field.key, false)}
+                              type="button"
+                            >
+                              {visiblePasswords[field.key] ? (
+                                <svg aria-hidden="true" viewBox="0 0 24 24">
+                                  <path
+                                    d="M2.2 12a1.55 1.55 0 010-2C3.5 8.4 7.5 4 13 4s9.5 4.4 10.8 6a1.55 1.55 0 010 2c-1.3 1.6-5.3 6-10.8 6S3.5 13.6 2.2 12z"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="1.8"
+                                  />
+                                  <circle
+                                    cx="12"
+                                    cy="11"
+                                    fill="none"
+                                    r="3.3"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                  />
+                                </svg>
+                              ) : (
+                                <svg aria-hidden="true" viewBox="0 0 24 24">
+                                  <path
+                                    d="M10.58 10.58A2 2 0 0013.42 13.42"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="1.8"
+                                  />
+                                  <path
+                                    d="M9.88 5.08A10.9 10.9 0 0112 4.9c5.27 0 9.19 4.04 10.49 5.63.36.44.36 1.1 0 1.54-.69.84-2.1 2.4-4.09 3.68M6.61 6.6C4.67 7.87 3.31 9.4 2.64 10.2a1.2 1.2 0 000 1.54c1.3 1.59 5.22 5.63 10.49 5.63 1.08 0 2.11-.17 3.09-.47"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="1.8"
+                                  />
+                                  <path
+                                    d="M3.5 3.5L20.5 20.5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="1.8"
+                                  />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
                         ) : (
                           <input
                             autoComplete={field.autoComplete}
@@ -353,19 +433,23 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
                 </button>
               </div>
             </form>
-
           </div>
+          {portalAccessLinks.length ? (
+            <div className="auth-role-links auth-role-links-inline">
+              {portalAccessLinks.map((item) => (
+                <Link
+                  aria-current={item.active ? "page" : undefined}
+                  className={item.active ? "auth-role-link-active" : ""}
+                  key={item.to}
+                  to={item.to}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          ) : null}
         </div>
       </section>
-      {portalAccessLinks.length ? (
-        <div className="auth-role-links auth-role-links-page">
-          {portalAccessLinks.map((item) => (
-            <Link key={item.to} to={item.to}>
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
