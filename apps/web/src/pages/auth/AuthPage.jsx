@@ -5,8 +5,11 @@ import { useNotifications } from "../../notifications/NotificationContext";
 import { useTheme } from "../../theme/ThemeContext";
 import { getThemeLogoPath } from "../../theme/themeAssets";
 
-const RIGHT_BRAND_ROWS = Array.from({ length: 18 }, (_, index) => index);
-const RIGHT_BRAND_WORDS = Array.from({ length: 36 }, () => "SahanZ");
+const RIGHT_BRAND_ROWS = Array.from({ length: 24 }, (_, index) => index);
+const RIGHT_BRAND_WORDS = Array.from({ length: 52 }, () => "SahanZ");
+const RIGHT_BRAND_GLOW_COPIES = ["a", "b"];
+const RIGHT_BRAND_GLOW_INTERVAL_MS = 1800;
+const RIGHT_BRAND_GLOW_COUNT = 48;
 const RIGHT_BRAND_COLORS = [
   "#1f4c8f",
   "#2962a3",
@@ -66,6 +69,7 @@ function roleLabel(role) {
 
 function getPortalAccessLinks(role) {
   return [
+    { to: "/login", label: "Customer Login", active: role === "customer" },
     { to: "/login/store-owner", label: "Store Login", active: role === "seller" },
     { to: "/login/delivery", label: "Deliverer Login", active: role === "delivery" }
   ];
@@ -182,6 +186,7 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
   const [form, setForm] = useState(createInitialState(role, defaultMode));
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [busy, setBusy] = useState(false);
+  const [glowingWordKeys, setGlowingWordKeys] = useState(() => new Set());
 
   useEffect(() => {
     setForm(createInitialState(role, defaultMode));
@@ -199,6 +204,28 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
       ),
     []
   );
+
+  useEffect(() => {
+    function randomizeGlowWords() {
+      const nextKeys = new Set();
+
+      while (nextKeys.size < RIGHT_BRAND_GLOW_COUNT) {
+        const row = Math.floor(Math.random() * RIGHT_BRAND_ROWS.length);
+        const index = Math.floor(Math.random() * RIGHT_BRAND_WORDS.length);
+        const copy =
+          RIGHT_BRAND_GLOW_COPIES[Math.floor(Math.random() * RIGHT_BRAND_GLOW_COPIES.length)];
+        nextKeys.add(`${row}-${copy}-${index}`);
+      }
+
+      setGlowingWordKeys(nextKeys);
+    }
+
+    randomizeGlowWords();
+    const intervalId = window.setInterval(randomizeGlowWords, RIGHT_BRAND_GLOW_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   if (user?.role === role) {
     return <Navigate to={getPortalPath(role)} replace />;
   }
@@ -277,14 +304,22 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
               <div className="auth-bg-branding-right-track">
                 <div className="auth-bg-branding-right-strip">
                   {RIGHT_BRAND_WORDS.map((word, index) => (
-                    <span key={`${row}-a-${index}`} style={{ color: rightBrandWordColors[row][index] }}>
+                    <span
+                      className={glowingWordKeys.has(`${row}-a-${index}`) ? "glow" : ""}
+                      key={`${row}-a-${index}`}
+                      style={{ color: rightBrandWordColors[row][index] }}
+                    >
                       {word}
                     </span>
                   ))}
                 </div>
                 <div aria-hidden="true" className="auth-bg-branding-right-strip">
                   {RIGHT_BRAND_WORDS.map((word, index) => (
-                    <span key={`${row}-b-${index}`} style={{ color: rightBrandWordColors[row][index] }}>
+                    <span
+                      className={glowingWordKeys.has(`${row}-b-${index}`) ? "glow" : ""}
+                      key={`${row}-b-${index}`}
+                      style={{ color: rightBrandWordColors[row][index] }}
+                    >
                       {word}
                     </span>
                   ))}
