@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useTheme } from "../theme/ThemeContext";
+import { getThemeLogoPath } from "../theme/themeAssets";
 
 function handleScrollToTop() {
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -11,6 +13,8 @@ function FooterIcon({ children }) {
 
 export default function SiteFooter() {
   const { user } = useAuth();
+  const { isDark } = useTheme();
+  const logoSrc = getThemeLogoPath(isDark);
   const currentYear = new Date().getFullYear();
 
   return (
@@ -19,7 +23,7 @@ export default function SiteFooter() {
         <div className="site-footer-brand">
           <span className="site-footer-kicker">Sahanz Network</span>
           <Link className="site-footer-brand-row" to="/">
-            <img alt="Sahanz Store" className="site-footer-logo" src="/my_logo.png" />
+            <img alt="Sahanz Store" className="site-footer-logo" src={logoSrc} />
             <strong>Sahanz Store</strong>
           </Link>
           <p className="muted">

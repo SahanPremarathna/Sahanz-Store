@@ -3,6 +3,8 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useShop } from "../shop/ShopContext";
 import { getCategories } from "../api/client";
+import { useTheme } from "../theme/ThemeContext";
+import { getThemeLogoPath } from "../theme/themeAssets";
 
 function ProfileBadge({ user }) {
   const initials = useMemo(
@@ -23,6 +25,8 @@ export default function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, user } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const logoSrc = getThemeLogoPath(isDark);
   const {
     catalog,
     filters,
@@ -168,7 +172,7 @@ export default function Navigation() {
     <header className="topbar">
       <div className="brand-lockup">
         <Link aria-label="Sahanz Store" className="brand" to="/">
-          <img alt="" aria-hidden="true" className="brand-logo" src="/my_logo.png" />
+          <img alt="" aria-hidden="true" className="brand-logo" src={logoSrc} />
         </Link>
       </div>
 
@@ -402,6 +406,18 @@ export default function Navigation() {
                 </Link>
               </div>
             )}
+            <button
+              aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+              aria-pressed={isDark}
+              className={`theme-switch ${isDark ? "is-dark" : ""}`}
+              onClick={toggleTheme}
+              type="button"
+            >
+              <span className="theme-switch-track">
+                <span className="theme-switch-thumb" />
+              </span>
+              <span className="theme-switch-label">{isDark ? "Dark" : "Light"}</span>
+            </button>
           </div>
         ) : (
           <div className="auth-cluster">
@@ -419,6 +435,18 @@ export default function Navigation() {
                 Log In
               </Link>
             )}
+            <button
+              aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+              aria-pressed={isDark}
+              className={`theme-switch ${isDark ? "is-dark" : ""}`}
+              onClick={toggleTheme}
+              type="button"
+            >
+              <span className="theme-switch-track">
+                <span className="theme-switch-thumb" />
+              </span>
+              <span className="theme-switch-label">{isDark ? "Dark" : "Light"}</span>
+            </button>
           </div>
         )}
       </div>

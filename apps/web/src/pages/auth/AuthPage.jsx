@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useNotifications } from "../../notifications/NotificationContext";
+import { useTheme } from "../../theme/ThemeContext";
+import { getThemeLogoPath } from "../../theme/themeAssets";
 
 const RIGHT_BRAND_ROWS = Array.from({ length: 18 }, (_, index) => index);
 const RIGHT_BRAND_WORDS = Array.from({ length: 36 }, () => "SahanZ");
@@ -175,6 +177,8 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
   const navigate = useNavigate();
   const { login, register, user } = useAuth();
   const notifications = useNotifications();
+  const { isDark } = useTheme();
+  const logoSrc = getThemeLogoPath(isDark);
   const [form, setForm] = useState(createInitialState(role, defaultMode));
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [busy, setBusy] = useState(false);
@@ -296,7 +300,7 @@ export default function AuthPage({ defaultMode = "login", role = "customer" }) {
             <div className="auth-form-head">
               <div>
                 <Link aria-label="Go to home page" className="auth-form-logo-link" to="/">
-                  <img alt="Sahanz Store" className="auth-form-logo" src="/my_logo.png" />
+                  <img alt="Sahanz Store" className="auth-form-logo" src={logoSrc} />
                 </Link>
                 <span className="eyebrow">{roleLabel(role)}</span>
                 <h2>{form.mode === "login" ? "Access account" : "Create account"}</h2>
